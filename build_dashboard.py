@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
@@ -25,6 +25,11 @@ MARKER = "/*__DATA__*/{}"
 # in der HTML-Datei, der Code blendet sie nur aus. Kann in config.json überschrieben werden.
 GATE_CODE = "7009"
 
+# Repo für den "jetzt neu laden"-Knopf (repository_dispatch). Der Knopf braucht einen
+# GitHub-Token mit Contents:write, der NUR im Browser des Nutzers gespeichert wird –
+# nie in dieser Datei. Owner/Repo sind nicht geheim.
+GH_REPO = "Jonas737Jonas/Trainings-Overview"
+
 
 def main() -> None:
     if not TEMPLATE.exists():
@@ -35,7 +40,7 @@ def main() -> None:
     data = json.loads(DATA_JSON.read_text(encoding="utf-8"))
     data.setdefault("days", [])
     data.setdefault("activities", [])
-    data["built"] = datetime.now().isoformat(timespec="seconds")
+    data["built"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     template = TEMPLATE.read_text(encoding="utf-8")
     if MARKER not in template:
@@ -54,7 +59,13 @@ def main() -> None:
             code = str(json.loads(cfg.read_text(encoding="utf-8")).get("gate_code", code))
         except (json.JSONDecodeError, OSError):
             pass
-    html = html.replace("__GATE_CODE__", code)
+    repo = GH_REPO
+    if cfg.exists():
+        try:
+            repo = str(json.loads(cfg.read_text(encoding="utf-8")).get("gh_repo", repo))
+        except (json.JSONDecodeError, OSError):
+            pass
+    html = html.replace("__GATE_CODE__", code).replace("__GH_REPO__", repo)
 
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
