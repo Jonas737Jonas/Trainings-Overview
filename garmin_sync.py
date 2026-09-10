@@ -34,7 +34,7 @@ import re
 import stat
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 # --- Pfade -------------------------------------------------------------------
@@ -414,7 +414,7 @@ def merge_json(new_days: list[dict], new_acts: list[dict], rng: dict) -> dict:
         acts[a.get("activity_id") or a.get("start_time")] = a
 
     merged = {
-        "generated": datetime.now().isoformat(timespec="seconds"),
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "range": rng,
         "days": sorted(days.values(), key=lambda r: r["date"]),
         "activities": sorted(
