@@ -121,8 +121,14 @@
   details[open] summary{color:var(--fg);font-weight:700}
 
   /* ---------- Seitenkopf ---------- */
-  .pageheader{border-top:1px solid var(--line);padding:9px 20px;
+  .pageheader{border-top:1px solid var(--line);padding:9px 20px;display:flex;
+    justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;
     font-weight:700;letter-spacing:-0.01em;font-size:12px;text-transform:lowercase;color:var(--fg2)}
+  .pageheader .upd{font-weight:400;font-size:11px;color:var(--fg3);text-transform:none}
+  .pageheader .upd button{background:none;border:1px solid var(--line);color:var(--fg3);
+    font:inherit;font-size:11px;padding:2px 8px;margin-left:8px;cursor:pointer;text-transform:lowercase}
+  .pageheader .upd button:hover{color:var(--fg);border-color:var(--fg3)}
+  .pageheader .upd.busy{color:var(--schlaf)}
 
   /* ---------- Randspalte: Vergleich zu gestern ---------- */
   .side .row .v em{font-style:normal;font-size:11px;color:var(--fg3);font-weight:400;margin-left:8px}
@@ -215,7 +221,10 @@
 
 <div class="grid-wrap" id="shell">
 
-  <div class="pageheader">jonas sport-dashboard</div>
+  <div class="pageheader">
+    <span>jonas sport-dashboard</span>
+    <span class="upd" id="ph-updated"></span>
+  </div>
 
   <header class="top">
     <div class="hero-row">
@@ -1150,6 +1159,59 @@ $("#switch").addEventListener("click",e=>{
   render(+b.dataset.days);
 });
 render(60);
+
+/* ---------- "zuletzt geladen" + jetzt-neu-laden-Knopf ---------- */
+(function(){
+  const REPO="__GH_REPO__", KEY="th_sync_token";
+  const el=$("#ph-updated");
+  function fmtRel(d){
+    const min=Math.round((Date.now()-d.getTime())/60000);
+    if(min<1) return "gerade eben";
+    if(min<60) return `vor ${min} min`;
+    if(min<1440) return `vor ${Math.round(min/60)} h`;
+    return `vor ${Math.round(min/1440)} tagen`;
+  }
+  function paint(msg){
+    const g=RAW.generated||RAW.built, d=g?new Date(g):null;
+    const stamp = d&&!isNaN(d.getTime())
+      ? `${d.toLocaleString("de-DE",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} · ${fmtRel(d)}`
+      : "unbekannt";
+    el.classList.remove("busy");
+    el.innerHTML = (msg||`daten geladen ${stamp}`) +
+      ` <button id="ph-refresh" type="button">↻ jetzt neu laden</button>`;
+    $("#ph-refresh").addEventListener("click",refresh);
+  }
+  async function refresh(){
+    let tok=null; try{ tok=localStorage.getItem(KEY); }catch(e){}
+    if(!tok){
+      tok=prompt("GitHub-Token (Fine-grained, Contents: Read and write auf dieses Repo) einfügen.\n\nWird nur in diesem Browser gespeichert — nie in der Seite selbst.");
+      if(!tok) return;
+      tok=tok.trim();
+      try{ localStorage.setItem(KEY,tok); }catch(e){}
+    }
+    el.classList.add("busy");
+    el.textContent="sync wird gestartet …";
+    try{
+      const r=await fetch(`https://api.github.com/repos/${REPO}/dispatches`,{
+        method:"POST",
+        headers:{Authorization:`Bearer ${tok}`,Accept:"application/vnd.github+json"},
+        body:JSON.stringify({event_type:"manual-sync"}),
+      });
+      if(r.status===204){
+        el.classList.remove("busy");
+        el.textContent="sync läuft — in ~6 minuten die seite neu laden.";
+      } else if(r.status===401||r.status===403){
+        try{ localStorage.removeItem(KEY); }catch(e){}
+        paint("token ungültig — beim nächsten klick neuen eingeben.");
+      } else {
+        paint(`fehler ${r.status} — später erneut versuchen.`);
+      }
+    }catch(e){
+      paint("keine verbindung zu github.");
+    }
+  }
+  paint();
+})();
 
 /* ---------- Sichtschutz (Anzeige-Sperre; die Daten stehen im Klartext in dieser Datei) ---------- */
 (function(){
