@@ -1,0 +1,67 @@
+name: garmin-sync
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: garmin-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Abhaengigkeiten
+        run: pip install -r requirements.txt
+
+      - name: Garmin-Token aus Secret wiederherstellen
+        env:
+          GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
+        run: |
+          if [ -z "$GARMIN_TOKENS" ]; then
+            echo "::error::Secret GARMIN_TOKENS fehlt."
+            exit 1
+          fi
+          mkdir -p tokens
+          printf '%s' "$GARMIN_TOKENS" > tokens/garmin_tokens.json
+          chmod 600 tokens/garmin_tokens.json
+
+      - name: Garmin holen + Dashboard bauen
+        run: python garmin_sync.py --days 60 --no-publish
+
+      - name: Dashboard ins Repo-Root kopieren
+        run: |
+          cp garmin/dashboard.html dashboard.html
+          cp garmin/robots.txt robots.txt
+
+      - name: Aenderungen committen
+        run: |
+          git config user.name  "garmin-sync-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dashboard.html robots.txt
+          if git diff --staged --quiet; then
+            echo "Keine Aenderungen."
+          else
+            git commit -m "sync $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
+
+      - name: Log als Artefakt sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-log
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
