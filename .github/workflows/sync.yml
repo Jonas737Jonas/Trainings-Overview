@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: garmin-sync
@@ -15,6 +17,9 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,28 +45,29 @@ jobs:
       - name: Garmin holen + Dashboard bauen
         run: python garmin_sync.py --days 60 --no-publish
 
-      - name: Dashboard ins Repo-Root kopieren
+      - name: Seite zusammenstellen
         run: |
-          cp garmin/dashboard.html dashboard.html
-          cp garmin/robots.txt robots.txt
+          mkdir -p _site
+          cp garmin/dashboard.html _site/dashboard.html
+          cp garmin/robots.txt _site/robots.txt
+          printf '<!doctype html><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=dashboard.html">' > _site/index.html
 
-      - name: Aenderungen committen
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: dashboard.html in den Repo-Verlauf committen
         run: |
           git config user.name  "garmin-sync-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dashboard.html robots.txt
+          cp garmin/dashboard.html dashboard.html
+          git add dashboard.html
           if git diff --staged --quiet; then
             echo "Keine Aenderungen."
           else
             git commit -m "sync $(date -u +%Y-%m-%dT%H:%MZ)"
             git push
           fi
-
-      - name: Log als Artefakt sichern
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sync-log
-          path: logs/
-          retention-days: 7
-          if-no-files-found: ignore
