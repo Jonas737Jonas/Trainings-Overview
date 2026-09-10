@@ -1,0 +1,22 @@
+# Virtuelle Umgebung
+.venv/
+
+# Login-Token (gewährt Zugriff auf das Garmin-Konto)
+tokens/
+
+# Alle abgerufenen Gesundheits- und Trainingsdaten
+garmin/
+
+# Logs
+logs/
+*.log
+
+# lokale Konfiguration (kann den Entsperr-Code enthalten)
+config.json
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
