@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Sport KI 01</title>
+<script>window.__PAGEERR=[];window.addEventListener("error",function(e){window.__PAGEERR.push({m:e.message,f:e.filename,l:e.lineno,c:e.colno});});</script>
+<style>
+  /* ---------- Farben & Grundlagen ---------- */
+  :root{
+    --bg:#08080A;
+    --fg:#F5F5F5;          /* Text, Kontrast zu --bg ~18:1 */
+    --fg2:#9A9AA0;          /* Sekundärtext, ~6.9:1  (>= 4.5:1) */
+    --fg3:#6E6E73;          /* schwacher Text/Achsen, ~3.6:1 (nur Grafik) */
+    --grid:#26262A;         /* Rasterlinien, bewusst dezent (Referenz, kein Datenträger) */
+    --line:#3A3A3E;         /* Modultrenner */
+    --hrv:#3D7BFF;          /* HRV + Trainingsumfang     ~5.3:1 */
+    --puls:#F0402F;         /* Puls                      ~5.3:1 */
+    --schlaf:#FFC400;       /* Schlaf                    ~12.7:1 */
+    --energie:#00C46A;      /* Energie / Stress / Body Battery ~8.8:1 */
+    --mark:#FFFFFF;         /* Hervorhebung: kurze Nächte, schwache Tage, laufende Woche, letzter Punkt */
+    --font:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  body{max-width:1180px;margin:0 auto;padding:0 18px 0}
+  a{color:var(--fg);text-decoration:none;border-bottom:1px solid var(--fg3)}
+  h1,h2,h3{font-weight:700;letter-spacing:-0.01em;text-transform:lowercase;margin:0}
+  .num{font-weight:700;letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
+  .muted{color:var(--fg2)}
+  .tiny{font-size:12px}
+
+  /* kleines Markenquadrat vor Überschriften/Labels */
+  .sq{display:inline-block;width:9px;height:9px;margin-right:8px;vertical-align:baseline;background:var(--fg)}
+  .sq.hrv{background:var(--hrv)} .sq.puls{background:var(--puls)}
+  .sq.schlaf{background:var(--schlaf)} .sq.energie{background:var(--energie)}
+  .sq.mark{background:var(--mark)}
+
+  /* sichtbares Raster aus dünnen Linien zwischen allen Modulen, keine Rundungen */
+  .grid-wrap{border-top:1px solid var(--line);border-left:1px solid var(--line)}
+  section{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:20px}
+
+  header.top{display:grid;grid-template-columns:1fr;border-top:1px solid var(--line)}
+  .hero-row{display:grid;grid-template-columns:2fr 1fr}
+  @media(max-width:760px){ .hero-row{grid-template-columns:1fr} }
+
+  /* ---------- Kopf: Bereitschaft ---------- */
+  .readiness .verdict-big{font-size:64px;line-height:0.95;letter-spacing:-0.04em;
+    font-weight:700;text-transform:lowercase;margin:10px 0 4px}
+  .readiness .verdict-big[data-v="hart"]{color:var(--energie)}
+  .readiness .verdict-big[data-v="locker"]{color:var(--schlaf)}
+  .readiness .verdict-big[data-v="ruhe"]{color:var(--puls)}
+  .readiness .r-why{font-size:14px;color:var(--fg);max-width:56ch}
+  .readiness .r-advice{font-size:13px;color:var(--fg2);margin:12px 0 0;max-width:60ch}
+  .readiness .r-uncert{color:var(--mark);font-weight:700}
+  .r-dots{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0 2px}
+  .r-dots .d{display:flex;align-items:center;font-size:11px;color:var(--fg2);text-transform:lowercase}
+  .r-dots .d i{width:9px;height:9px;margin-right:6px;display:inline-block;background:var(--fg3)}
+  .r-dots .d[data-s="gruen"] i{background:var(--energie)}
+  .r-dots .d[data-s="gelb"] i{background:var(--schlaf)}
+  .r-dots .d[data-s="rot"] i{background:var(--puls)}
+  .r-dots .legend{font-size:10px;color:var(--fg3);width:100%;margin-top:-6px}
+
+  /* ---------- Randspalte ---------- */
+  .side .row{display:flex;justify-content:space-between;align-items:baseline;
+    padding:7px 0;border-bottom:1px solid var(--grid)}
+  .side .row:last-child{border-bottom:0}
+  .side .row .v{font-size:20px}
+
+  /* ---------- Umschaltleiste ---------- */
+  .switch{display:flex;gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:var(--bg);z-index:5}
+  .switch button{flex:0 0 auto;padding:11px 20px;background:var(--bg);color:var(--fg2);
+    border:0;border-right:1px solid var(--line);font-family:var(--font);font-size:13px;
+    text-transform:lowercase;cursor:pointer;letter-spacing:0.02em}
+  .switch button[aria-pressed="true"]{background:var(--fg);color:var(--bg);font-weight:700}
+  .switch .meta{margin-left:auto;padding:11px 4px;color:var(--fg3);font-size:11px;align-self:center}
+
+  /* ---------- Kacheln ---------- */
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr)}
+  @media(max-width:760px){ .tiles{grid-template-columns:repeat(2,1fr)} }
+  .tile .label{font-size:12px;text-transform:lowercase;color:var(--fg2)}
+  .tile .v{font-size:30px;margin:6px 0 2px}
+  .tile .v .u{font-size:12px;font-weight:400;color:var(--fg2);margin-left:4px;letter-spacing:0}
+  .tile .delta{font-size:12px;color:var(--fg2)}
+  .tile .delta.flag{color:var(--mark);font-weight:700}
+  .tile svg{display:block;width:100%;height:44px;margin-top:10px}
+
+  /* ---------- Diagramme ---------- */
+  .chart h3{margin-bottom:4px}
+  .chart .desc{color:var(--fg2);font-size:12.5px;margin:6px 0 12px;max-width:62ch}
+  .chart svg{display:block;width:100%;height:auto}
+  .chart .cap{fill:var(--fg3);font-size:11px}
+  .chart text{font-family:var(--font)}
+  .axis{stroke:var(--fg3);stroke-width:1}
+  .gridline{stroke:var(--grid);stroke-width:1}
+  .lastlabel{fill:var(--fg);font-weight:700;font-size:12px}
+  .band{fill:var(--hrv);opacity:0.12}
+  .bandline{stroke:var(--hrv);stroke-width:1;opacity:0.5}
+
+  .cross{stroke:var(--fg2);stroke-width:1;pointer-events:none}
+  .tooltip{position:fixed;pointer-events:none;background:var(--bg);border:1px solid var(--line);
+    padding:7px 9px;font-size:12px;z-index:20;max-width:240px;display:none}
+  .tooltip .t-d{color:var(--fg2);margin-bottom:3px}
+  .tooltip b{font-weight:700}
+
+  .charts2{display:grid;grid-template-columns:1fr 1fr}
+  @media(max-width:760px){ .charts2{grid-template-columns:1fr} }
+
+  /* ---------- Tabellen ---------- */
+  table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--grid);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--fg2);font-weight:400;text-transform:lowercase;position:sticky;top:44px;background:var(--bg)}
+  .tbl-scroll{overflow-x:auto}
+  tr.markrow td{color:var(--mark)}
+  details summary{cursor:pointer;color:var(--fg2);text-transform:lowercase;font-size:13px;padding:2px 0}
+  details[open] summary{color:var(--fg);font-weight:700}
+
+  /* ---------- Fußzeile ---------- */
+  footer{display:flex;justify-content:space-between;align-items:center;
+    border-top:1px solid var(--line);padding:14px 2px 20px;color:var(--fg3);font-size:11px}
+  footer a{color:var(--fg3);border-bottom-color:var(--fg3)}
+
+  @media (prefers-reduced-motion: reduce){
+    .anim-line{stroke-dashoffset:0 !important;transition:none !important}
+    .anim-bar{transform:none !important;transition:none !important}
+  }
+
+  /* ---------- Sichtschutz (nur Anzeige-Sperre, keine echte Verschlüsselung) ---------- */
+  body.locked #shell{filter:blur(18px);pointer-events:none;user-select:none}
+  #gate{position:fixed;inset:0;z-index:50;background:var(--bg);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+  body:not(.locked) #gate{display:none}
+  #gate .brand{font-weight:700;letter-spacing:-0.01em;text-transform:lowercase}
+  #gate p{color:var(--fg2);font-size:12px;max-width:34ch;margin:0}
+  #gate form{display:flex;border:1px solid var(--fg)}
+  #gate input{background:var(--bg);color:var(--fg);border:0;padding:12px 14px;font-family:var(--font);
+    font-size:16px;letter-spacing:0.3em;width:150px;text-align:center;outline:none}
+  #gate button{background:var(--fg);color:var(--bg);border:0;padding:12px 18px;font-family:var(--font);
+    font-weight:700;text-transform:lowercase;cursor:pointer}
+  #gate .err{color:var(--puls);font-size:12px;min-height:1em}
+  #relock{position:fixed;right:8px;bottom:8px;z-index:40;font-size:10px;color:var(--fg3);
+    background:var(--bg);border:1px solid var(--line);padding:3px 7px;cursor:pointer;text-transform:lowercase}
+  body.locked #relock{display:none}
+</style>
+</head>
+<body class="locked">
+
+<div id="gate">
+  <div class="brand">sport ki 01</div>
+  <p>privat. bitte code eingeben.</p>
+  <form id="gate-form">
+    <input id="gate-code" type="password" inputmode="numeric" autocomplete="off"
+      aria-label="code" placeholder="····">
+    <button type="submit">öffnen</button>
+  </form>
+  <div class="err" id="gate-err"></div>
+</div>
+<div id="relock" title="wieder sperren">sperren</div>
+
+<div class="grid-wrap" id="shell">
+
+  <header class="top">
+    <div class="hero-row">
+      <section class="readiness">
+        <h3><span class="sq" id="r-sq"></span>bereitschaft — trainiere ich heute?</h3>
+        <div class="verdict-big" id="r-verdict" data-v="">–</div>
+        <div class="r-why" id="r-why"></div>
+        <div class="r-dots" id="r-dots"></div>
+        <p class="r-advice" id="r-advice"></p>
+      </section>
+
+      <section class="side">
+        <h3><span class="sq"></span>aktuell</h3>
+        <div class="row"><span class="muted">schlaf</span><span class="v num" id="s-sleep">–</span></div>
+        <div class="row"><span class="muted">hrv letzte nacht</span><span class="v num" id="s-hrv">–</span></div>
+        <div class="row"><span class="muted">ruhepuls</span><span class="v num" id="s-rhr">–</span></div>
+        <div class="row"><span class="muted">body battery</span><span class="v num" id="s-bb">–</span></div>
+        <div class="row"><span class="muted">laufkm 7 tage</span><span class="v num" id="s-dist">–</span></div>
+      </section>
+    </div>
+  </header>
+
+  <nav class="switch" id="switch">
+    <button data-days="14">14 tage</button>
+    <button data-days="30">30 tage</button>
+    <button data-days="60" aria-pressed="true">60 tage</button>
+    <span class="meta" id="meta"></span>
+  </nav>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="chart" id="c-hrv">
+    <h3><span class="sq hrv"></span>hrv &amp; baseline</h3>
+    <p class="desc">Herzratenvariabilität der letzten Nacht in Millisekunden. Das blaue Band ist
+      dein Normalbereich im gewählten Zeitraum (Mittelwert ± eine Standardabweichung). Punkte
+      unter dem Band deuten auf Belastung oder zu wenig Erholung, Punkte darüber auf einen
+      besonders erholten Zustand. Höher ist grundsätzlich besser.</p>
+    <div class="chartbox"></div>
+  </section>
+
+  <div class="charts2">
+    <section class="chart" id="c-rhr">
+      <h3><span class="sq puls"></span>ruhepuls</h3>
+      <p class="desc">Niedrigster Herzschlag pro Minute in Ruhe. Steigt er über mehrere Tage
+        an, ist das oft ein Zeichen für unvollständige Erholung, beginnende Erkältung oder
+        Stress. Niedriger ist besser.</p>
+      <div class="chartbox"></div>
+    </section>
+    <section class="chart" id="c-sleep">
+      <h3><span class="sq schlaf"></span>schlaf</h3>
+      <p class="desc">Schlafdauer pro Nacht in Stunden. Die Linie markiert 7 Stunden. Balken
+        darunter sind weiß hervorgehoben — kurze Nächte, die sich in HRV und Ruhepuls des
+        Folgetags niederschlagen können.</p>
+      <div class="chartbox"></div>
+    </section>
+  </div>
+
+  <div class="charts2">
+    <section class="chart" id="c-bb">
+      <h3><span class="sq energie"></span>body battery</h3>
+      <p class="desc">Garmins Energiespeicher von 0 bis 100. Jeder Balken zeigt die Tagesspanne
+        vom tiefsten zum höchsten Wert. Schlaf lädt auf, Aktivität und Stress entladen. Tage
+        mit niedrigem Höchstwert sind weiß markiert.</p>
+      <div class="chartbox"></div>
+    </section>
+    <section class="chart" id="c-km">
+      <h3><span class="sq hrv"></span>laufkilometer je woche</h3>
+      <p class="desc">Summe der Distanz zu Fuß je Kalenderwoche (Laufen, Wandern, Gehen).
+        Radfahren zählt hier bewusst nicht mit, damit lange Touren die Laufwochen nicht
+        unvergleichbar machen. Die laufende, noch nicht abgeschlossene Woche ist weiß
+        markiert.</p>
+      <div class="chartbox"></div>
+    </section>
+  </div>
+
+  <section id="log">
+    <h3><span class="sq"></span>logbuch</h3>
+    <p class="desc muted">Die letzten Einheiten im Zeitraum. Pace in Minuten pro Kilometer.
+      ate = aerober Trainingseffekt (1 = kaum, 5 = sehr hoch).</p>
+    <div class="tbl-scroll">
+      <table id="log-tbl"><thead><tr>
+        <th>datum</th><th>name</th><th>distanz</th><th>zeit</th><th>pace</th><th>⌀ puls</th><th>ate</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <section id="raw">
+    <details>
+      <summary>rohdaten-tabelle (alle werte des zeitraums)</summary>
+      <div class="tbl-scroll" style="margin-top:12px">
+        <table id="raw-tbl"><thead><tr>
+          <th>datum</th><th>hrv</th><th>ruhepuls</th><th>schlaf h</th>
+          <th>schlaf-score</th><th>stress ⌀</th><th>bb tief</th><th>bb hoch</th><th>schritte</th><th>tagesweg km</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </details>
+  </section>
+
+  <footer>
+    <span>Sport KI 01</span>
+    <span>Setup von <a href="https://felsr.com" target="_blank" rel="noopener">@felsr — felsr.com</a></span>
+  </footer>
+
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+"use strict";
+const RAW = {"generated":"2026-09-10T12:20:01","range":{"start":"2026-09-08","end":"2026-09-10"},"days":[{"date":"2026-07-13","resting_hr":47.0,"steps":10659.0,"distance_m":10642.0,"stress_avg":30.0,"stress_max":92.0,"bb_low":14.0,"bb_high":100.0,"bb_last":14.0,"hrv_avg":73.0,"hrv_baseline_low":58.0,"hrv_baseline_high":79.0,"hrv_status":"BALANCED","sleep_hours":6.58,"sleep_score":79.0,"sleep_deep_hours":0.85,"sleep_rem_hours":1.23,"sleep_light_hours":4.5,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-14","resting_hr":48.0,"steps":2972.0,"distance_m":2380.0,"stress_avg":30.0,"stress_max":96.0,"bb_low":14.0,"bb_high":96.0,"bb_last":21.0,"hrv_avg":70.0,"hrv_baseline_low":58.0,"hrv_baseline_high":79.0,"hrv_status":"BALANCED","sleep_hours":7.21,"sleep_score":82.0,"sleep_deep_hours":1.82,"sleep_rem_hours":0.87,"sleep_light_hours":4.53,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-15","resting_hr":46.0,"steps":15044.0,"distance_m":14681.0,"stress_avg":29.0,"stress_max":99.0,"bb_low":11.0,"bb_high":98.0,"bb_last":11.0,"hrv_avg":73.0,"hrv_baseline_low":58.0,"hrv_baseline_high":79.0,"hrv_status":"BALANCED","sleep_hours":7.87,"sleep_score":91.0,"sleep_deep_hours":2.47,"sleep_rem_hours":1.1,"sleep_light_hours":4.3,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-16","resting_hr":47.0,"steps":4275.0,"distance_m":3423.0,"stress_avg":27.0,"stress_max":96.0,"bb_low":11.0,"bb_high":91.0,"bb_last":25.0,"hrv_avg":70.0,"hrv_baseline_low":58.0,"hrv_baseline_high":80.0,"hrv_status":"BALANCED","sleep_hours":7.41,"sleep_score":87.0,"sleep_deep_hours":1.95,"sleep_rem_hours":1.6,"sleep_light_hours":3.87,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-17","resting_hr":45.0,"steps":6248.0,"distance_m":62946.0,"stress_avg":33.0,"stress_max":100.0,"bb_low":11.0,"bb_high":95.0,"bb_last":11.0,"hrv_avg":69.0,"hrv_baseline_low":58.0,"hrv_baseline_high":80.0,"hrv_status":"BALANCED","sleep_hours":6.77,"sleep_score":81.0,"sleep_deep_hours":1.87,"sleep_rem_hours":1.1,"sleep_light_hours":3.82,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-18","resting_hr":46.0,"steps":17116.0,"distance_m":14879.0,"stress_avg":31.0,"stress_max":99.0,"bb_low":11.0,"bb_high":96.0,"bb_last":18.0,"hrv_avg":70.0,"hrv_baseline_low":59.0,"hrv_baseline_high":80.0,"hrv_status":"BALANCED","sleep_hours":7.6,"sleep_score":85.0,"sleep_deep_hours":1.92,"sleep_rem_hours":1.38,"sleep_light_hours":4.3,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-19","resting_hr":47.0,"steps":6094.0,"distance_m":4889.0,"stress_avg":22.0,"stress_max":77.0,"bb_low":17.0,"bb_high":94.0,"bb_last":30.0,"hrv_avg":68.0,"hrv_baseline_low":59.0,"hrv_baseline_high":80.0,"hrv_status":"BALANCED","sleep_hours":6.95,"sleep_score":83.0,"sleep_deep_hours":2.15,"sleep_rem_hours":1.03,"sleep_light_hours":3.77,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-20","resting_hr":50.0,"steps":9896.0,"distance_m":8680.0,"stress_avg":24.0,"stress_max":85.0,"bb_low":25.0,"bb_high":90.0,"bb_last":37.0,"hrv_avg":67.0,"hrv_baseline_low":59.0,"hrv_baseline_high":80.0,"hrv_status":"BALANCED","sleep_hours":6.48,"sleep_score":73.0,"sleep_deep_hours":2.1,"sleep_rem_hours":0.6,"sleep_light_hours":3.78,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-21","resting_hr":44.0,"steps":3423.0,"distance_m":2741.0,"stress_avg":34.0,"stress_max":95.0,"bb_low":16.0,"bb_high":100.0,"bb_last":19.0,"hrv_avg":74.0,"hrv_baseline_low":59.0,"hrv_baseline_high":80.0,"hrv_status":"BALANCED","sleep_hours":8.52,"sleep_score":97.0,"sleep_deep_hours":2.72,"sleep_rem_hours":1.83,"sleep_light_hours":3.97,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-22","resting_hr":45.0,"steps":13187.0,"distance_m":10627.0,"stress_avg":40.0,"stress_max":94.0,"bb_low":10.0,"bb_high":93.0,"bb_last":10.0,"hrv_avg":68.0,"hrv_baseline_low":59.0,"hrv_baseline_high":80.0,"hrv_status":"BALANCED","sleep_hours":7.33,"sleep_score":85.0,"sleep_deep_hours":2.25,"sleep_rem_hours":1.85,"sleep_light_hours":3.23,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-23","resting_hr":47.0,"steps":10978.0,"distance_m":10464.0,"stress_avg":22.0,"stress_max":96.0,"bb_low":10.0,"bb_high":91.0,"bb_last":39.0,"hrv_avg":68.0,"hrv_baseline_low":59.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":7.91,"sleep_score":98.0,"sleep_deep_hours":2.32,"sleep_rem_hours":1.93,"sleep_light_hours":3.67,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-24","resting_hr":44.0,"steps":11284.0,"distance_m":10641.0,"stress_avg":33.0,"stress_max":95.0,"bb_low":12.0,"bb_high":100.0,"bb_last":12.0,"hrv_avg":72.0,"hrv_baseline_low":59.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":7.49,"sleep_score":88.0,"sleep_deep_hours":1.82,"sleep_rem_hours":1.13,"sleep_light_hours":4.55,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-25","resting_hr":47.0,"steps":16278.0,"distance_m":11494.0,"stress_avg":22.0,"stress_max":93.0,"bb_low":11.0,"bb_high":76.0,"bb_last":19.0,"hrv_avg":64.0,"hrv_baseline_low":59.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":6.1,"sleep_score":73.0,"sleep_deep_hours":1.53,"sleep_rem_hours":0.85,"sleep_light_hours":3.72,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-26","resting_hr":49.0,"steps":9399.0,"distance_m":7535.0,"stress_avg":29.0,"stress_max":87.0,"bb_low":15.0,"bb_high":88.0,"bb_last":36.0,"hrv_avg":62.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":7.78,"sleep_score":88.0,"sleep_deep_hours":1.35,"sleep_rem_hours":1.42,"sleep_light_hours":5.02,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-27","resting_hr":46.0,"steps":13383.0,"distance_m":13433.0,"stress_avg":24.0,"stress_max":91.0,"bb_low":26.0,"bb_high":100.0,"bb_last":26.0,"hrv_avg":72.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":7.75,"sleep_score":89.0,"sleep_deep_hours":1.65,"sleep_rem_hours":1.43,"sleep_light_hours":4.67,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-28","resting_hr":47.0,"steps":3475.0,"distance_m":61251.0,"stress_avg":34.0,"stress_max":99.0,"bb_low":15.0,"bb_high":99.0,"bb_last":15.0,"hrv_avg":66.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":7.58,"sleep_score":89.0,"sleep_deep_hours":2.62,"sleep_rem_hours":1.53,"sleep_light_hours":3.43,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-29","resting_hr":50.0,"steps":7649.0,"distance_m":7116.0,"stress_avg":28.0,"stress_max":90.0,"bb_low":15.0,"bb_high":88.0,"bb_last":27.0,"hrv_avg":67.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":7.42,"sleep_score":78.0,"sleep_deep_hours":2.02,"sleep_rem_hours":0.75,"sleep_light_hours":4.65,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-30","resting_hr":47.0,"steps":4439.0,"distance_m":5053.0,"stress_avg":27.0,"stress_max":99.0,"bb_low":25.0,"bb_high":100.0,"bb_last":30.0,"hrv_avg":71.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":8.29,"sleep_score":94.0,"sleep_deep_hours":1.68,"sleep_rem_hours":1.4,"sleep_light_hours":5.22,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-07-31","resting_hr":46.0,"steps":5511.0,"distance_m":48779.0,"stress_avg":34.0,"stress_max":100.0,"bb_low":14.0,"bb_high":100.0,"bb_last":14.0,"hrv_avg":77.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":8.1,"sleep_score":82.0,"sleep_deep_hours":1.82,"sleep_rem_hours":0.97,"sleep_light_hours":5.32,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-01","resting_hr":46.0,"steps":8565.0,"distance_m":13045.0,"stress_avg":29.0,"stress_max":99.0,"bb_low":13.0,"bb_high":87.0,"bb_last":22.0,"hrv_avg":77.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":5.96,"sleep_score":76.0,"sleep_deep_hours":1.78,"sleep_rem_hours":1.03,"sleep_light_hours":3.15,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-02","resting_hr":51.0,"steps":558.0,"distance_m":447.0,"stress_avg":49.0,"stress_max":93.0,"bb_low":14.0,"bb_high":57.0,"bb_last":25.0,"hrv_avg":26.0,"hrv_baseline_low":60.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":4.03,"sleep_score":32.0,"sleep_deep_hours":1.63,"sleep_rem_hours":0.25,"sleep_light_hours":2.15,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-03","resting_hr":46.0,"steps":4330.0,"distance_m":61974.0,"stress_avg":27.0,"stress_max":100.0,"bb_low":22.0,"bb_high":100.0,"bb_last":22.0,"hrv_avg":82.0,"hrv_baseline_low":61.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":8.53,"sleep_score":92.0,"sleep_deep_hours":1.5,"sleep_rem_hours":1.37,"sleep_light_hours":5.67,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-04","resting_hr":47.0,"steps":4794.0,"distance_m":3839.0,"stress_avg":26.0,"stress_max":94.0,"bb_low":22.0,"bb_high":100.0,"bb_last":26.0,"hrv_avg":80.0,"hrv_baseline_low":61.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":7.27,"sleep_score":85.0,"sleep_deep_hours":1.6,"sleep_rem_hours":1.2,"sleep_light_hours":4.47,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-05","resting_hr":45.0,"steps":2817.0,"distance_m":2255.0,"stress_avg":23.0,"stress_max":86.0,"bb_low":25.0,"bb_high":99.0,"bb_last":39.0,"hrv_avg":81.0,"hrv_baseline_low":61.0,"hrv_baseline_high":81.0,"hrv_status":"BALANCED","sleep_hours":6.78,"sleep_score":85.0,"sleep_deep_hours":2.02,"sleep_rem_hours":1.65,"sleep_light_hours":3.12,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-06","resting_hr":47.0,"steps":8951.0,"distance_m":8732.0,"stress_avg":31.0,"stress_max":93.0,"bb_low":25.0,"bb_high":100.0,"bb_last":25.0,"hrv_avg":70.0,"hrv_baseline_low":61.0,"hrv_baseline_high":82.0,"hrv_status":"BALANCED","sleep_hours":7.86,"sleep_score":88.0,"sleep_deep_hours":2.02,"sleep_rem_hours":1.57,"sleep_light_hours":4.28,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-07","resting_hr":51.0,"steps":6387.0,"distance_m":1515.0,"stress_avg":30.0,"stress_max":94.0,"bb_low":53.0,"bb_high":76.0,"bb_last":55.0,"hrv_avg":55.0,"hrv_baseline_low":61.0,"hrv_baseline_high":82.0,"hrv_status":"BALANCED","sleep_hours":6.37,"sleep_score":74.0,"sleep_deep_hours":1.87,"sleep_rem_hours":1.32,"sleep_light_hours":3.2,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-08","resting_hr":51.0,"steps":8017.0,"distance_m":2153.0,"stress_avg":31.0,"stress_max":93.0,"bb_low":45.0,"bb_high":87.0,"bb_last":45.0,"hrv_avg":55.0,"hrv_baseline_low":61.0,"hrv_baseline_high":82.0,"hrv_status":"UNBALANCED","sleep_hours":5.95,"sleep_score":71.0,"sleep_deep_hours":1.45,"sleep_rem_hours":0.83,"sleep_light_hours":3.67,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-09","resting_hr":52.0,"steps":6716.0,"distance_m":6294.0,"stress_avg":27.0,"stress_max":80.0,"bb_low":28.0,"bb_high":84.0,"bb_last":30.0,"hrv_avg":54.0,"hrv_baseline_low":59.0,"hrv_baseline_high":86.0,"hrv_status":"BALANCED","sleep_hours":6.3,"sleep_score":72.0,"sleep_deep_hours":1.4,"sleep_rem_hours":0.68,"sleep_light_hours":4.22,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-10","resting_hr":51.0,"steps":2031.0,"distance_m":59043.0,"stress_avg":30.0,"stress_max":94.0,"bb_low":12.0,"bb_high":90.0,"bb_last":12.0,"hrv_avg":57.0,"hrv_baseline_low":60.0,"hrv_baseline_high":86.0,"hrv_status":"BALANCED","sleep_hours":8.21,"sleep_score":84.0,"sleep_deep_hours":2.45,"sleep_rem_hours":0.9,"sleep_light_hours":4.87,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-11","resting_hr":51.0,"steps":6559.0,"distance_m":6293.0,"stress_avg":34.0,"stress_max":95.0,"bb_low":12.0,"bb_high":72.0,"bb_last":18.0,"hrv_avg":66.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.91,"sleep_score":71.0,"sleep_deep_hours":1.52,"sleep_rem_hours":0.43,"sleep_light_hours":5.97,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-12","resting_hr":47.0,"steps":10211.0,"distance_m":11051.0,"stress_avg":29.0,"stress_max":93.0,"bb_low":18.0,"bb_high":91.0,"bb_last":30.0,"hrv_avg":73.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.32,"sleep_score":79.0,"sleep_deep_hours":1.73,"sleep_rem_hours":1.4,"sleep_light_hours":4.18,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-13","resting_hr":47.0,"steps":4559.0,"distance_m":62054.0,"stress_avg":33.0,"stress_max":99.0,"bb_low":16.0,"bb_high":100.0,"bb_last":20.0,"hrv_avg":74.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.3,"sleep_score":79.0,"sleep_deep_hours":1.82,"sleep_rem_hours":1.12,"sleep_light_hours":4.37,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-14","resting_hr":46.0,"steps":7119.0,"distance_m":7240.0,"stress_avg":23.0,"stress_max":88.0,"bb_low":21.0,"bb_high":100.0,"bb_last":45.0,"hrv_avg":72.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.38,"sleep_score":91.0,"sleep_deep_hours":2.08,"sleep_rem_hours":1.4,"sleep_light_hours":4.9,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-15","resting_hr":53.0,"steps":9863.0,"distance_m":7123.0,"stress_avg":42.0,"stress_max":99.0,"bb_low":25.0,"bb_high":89.0,"bb_last":25.0,"hrv_avg":51.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":3.65,"sleep_score":42.0,"sleep_deep_hours":1.37,"sleep_rem_hours":0.27,"sleep_light_hours":2.02,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-16","resting_hr":46.0,"steps":2479.0,"distance_m":72866.0,"stress_avg":21.0,"stress_max":89.0,"bb_low":20.0,"bb_high":95.0,"bb_last":38.0,"hrv_avg":72.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.4,"sleep_score":89.0,"sleep_deep_hours":1.95,"sleep_rem_hours":0.95,"sleep_light_hours":5.5,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-17","resting_hr":47.0,"steps":6858.0,"distance_m":6602.0,"stress_avg":26.0,"stress_max":90.0,"bb_low":24.0,"bb_high":100.0,"bb_last":24.0,"hrv_avg":76.0,"hrv_baseline_low":60.0,"hrv_baseline_high":86.0,"hrv_status":"BALANCED","sleep_hours":8.07,"sleep_score":77.0,"sleep_deep_hours":1.58,"sleep_rem_hours":0.92,"sleep_light_hours":5.57,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-18","resting_hr":47.0,"steps":8500.0,"distance_m":9061.0,"stress_avg":30.0,"stress_max":95.0,"bb_low":20.0,"bb_high":98.0,"bb_last":25.0,"hrv_avg":73.0,"hrv_baseline_low":60.0,"hrv_baseline_high":86.0,"hrv_status":"BALANCED","sleep_hours":6.82,"sleep_score":78.0,"sleep_deep_hours":1.68,"sleep_rem_hours":0.73,"sleep_light_hours":4.4,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-19","resting_hr":46.0,"steps":8150.0,"distance_m":19563.0,"stress_avg":25.0,"stress_max":96.0,"bb_low":24.0,"bb_high":100.0,"bb_last":28.0,"hrv_avg":71.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.0,"sleep_score":87.0,"sleep_deep_hours":1.45,"sleep_rem_hours":1.63,"sleep_light_hours":4.92,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-20","resting_hr":47.0,"steps":10754.0,"distance_m":11807.0,"stress_avg":27.0,"stress_max":92.0,"bb_low":22.0,"bb_high":100.0,"bb_last":32.0,"hrv_avg":76.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.7,"sleep_score":89.0,"sleep_deep_hours":1.83,"sleep_rem_hours":1.43,"sleep_light_hours":4.43,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-21","resting_hr":45.0,"steps":1996.0,"distance_m":22190.0,"stress_avg":22.0,"stress_max":99.0,"bb_low":32.0,"bb_high":100.0,"bb_last":35.0,"hrv_avg":74.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.3,"sleep_score":89.0,"sleep_deep_hours":1.42,"sleep_rem_hours":1.2,"sleep_light_hours":5.68,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-22","resting_hr":48.0,"steps":13671.0,"distance_m":11647.0,"stress_avg":20.0,"stress_max":81.0,"bb_low":27.0,"bb_high":100.0,"bb_last":27.0,"hrv_avg":69.0,"hrv_baseline_low":60.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.17,"sleep_score":91.0,"sleep_deep_hours":2.12,"sleep_rem_hours":1.62,"sleep_light_hours":4.43,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-23","resting_hr":48.0,"steps":8736.0,"distance_m":75520.0,"stress_avg":35.0,"stress_max":100.0,"bb_low":23.0,"bb_high":97.0,"bb_last":26.0,"hrv_avg":68.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.77,"sleep_score":81.0,"sleep_deep_hours":2.2,"sleep_rem_hours":1.07,"sleep_light_hours":4.5,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-24","resting_hr":51.0,"steps":3955.0,"distance_m":3167.0,"stress_avg":24.0,"stress_max":96.0,"bb_low":26.0,"bb_high":79.0,"bb_last":46.0,"hrv_avg":60.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.5,"sleep_score":74.0,"sleep_deep_hours":1.62,"sleep_rem_hours":0.7,"sleep_light_hours":6.18,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-25","resting_hr":46.0,"steps":7953.0,"distance_m":6381.0,"stress_avg":23.0,"stress_max":84.0,"bb_low":32.0,"bb_high":100.0,"bb_last":38.0,"hrv_avg":74.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.15,"sleep_score":95.0,"sleep_deep_hours":2.05,"sleep_rem_hours":1.55,"sleep_light_hours":4.55,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-26","resting_hr":46.0,"steps":1707.0,"distance_m":59900.0,"stress_avg":24.0,"stress_max":100.0,"bb_low":25.0,"bb_high":100.0,"bb_last":30.0,"hrv_avg":74.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.72,"sleep_score":86.0,"sleep_deep_hours":2.25,"sleep_rem_hours":0.82,"sleep_light_hours":4.65,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-27","resting_hr":49.0,"steps":4183.0,"distance_m":3364.0,"stress_avg":26.0,"stress_max":99.0,"bb_low":30.0,"bb_high":97.0,"bb_last":32.0,"hrv_avg":68.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":8.22,"sleep_score":87.0,"sleep_deep_hours":1.97,"sleep_rem_hours":1.33,"sleep_light_hours":4.92,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-28","resting_hr":46.0,"steps":14836.0,"distance_m":10422.0,"stress_avg":23.0,"stress_max":93.0,"bb_low":19.0,"bb_high":92.0,"bb_last":19.0,"hrv_avg":71.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":5.38,"sleep_score":68.0,"sleep_deep_hours":1.82,"sleep_rem_hours":1.2,"sleep_light_hours":2.37,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-29","resting_hr":51.0,"steps":3242.0,"distance_m":2596.0,"stress_avg":25.0,"stress_max":78.0,"bb_low":18.0,"bb_high":79.0,"bb_last":54.0,"hrv_avg":48.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":3.05,"sleep_score":39.0,"sleep_deep_hours":0.42,"sleep_rem_hours":0.2,"sleep_light_hours":2.43,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-30","resting_hr":52.0,"steps":633.0,"distance_m":507.0,"stress_avg":32.0,"stress_max":74.0,"bb_low":19.0,"bb_high":29.0,"bb_last":29.0,"hrv_avg":null,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":null,"sleep_score":null,"sleep_deep_hours":null,"sleep_rem_hours":null,"sleep_light_hours":null,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-08-31","resting_hr":46.0,"steps":6894.0,"distance_m":5568.0,"stress_avg":31.0,"stress_max":93.0,"bb_low":18.0,"bb_high":94.0,"bb_last":21.0,"hrv_avg":72.0,"hrv_baseline_low":62.0,"hrv_baseline_high":86.0,"hrv_status":"BALANCED","sleep_hours":7.33,"sleep_score":73.0,"sleep_deep_hours":1.77,"sleep_rem_hours":0.83,"sleep_light_hours":4.73,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-01","resting_hr":45.0,"steps":6611.0,"distance_m":5294.0,"stress_avg":25.0,"stress_max":84.0,"bb_low":21.0,"bb_high":98.0,"bb_last":36.0,"hrv_avg":75.0,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.18,"sleep_score":89.0,"sleep_deep_hours":2.62,"sleep_rem_hours":2.08,"sleep_light_hours":2.48,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-02","resting_hr":45.0,"steps":3954.0,"distance_m":3166.0,"stress_avg":31.0,"stress_max":99.0,"bb_low":15.0,"bb_high":100.0,"bb_last":15.0,"hrv_avg":74.0,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.62,"sleep_score":86.0,"sleep_deep_hours":1.83,"sleep_rem_hours":1.45,"sleep_light_hours":4.33,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-03","resting_hr":49.0,"steps":9033.0,"distance_m":7865.0,"stress_avg":27.0,"stress_max":97.0,"bb_low":15.0,"bb_high":82.0,"bb_last":25.0,"hrv_avg":65.0,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.3,"sleep_score":76.0,"sleep_deep_hours":1.08,"sleep_rem_hours":1.22,"sleep_light_hours":5.0,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-04","resting_hr":52.0,"steps":10707.0,"distance_m":64744.0,"stress_avg":41.0,"stress_max":100.0,"bb_low":14.0,"bb_high":84.0,"bb_last":14.0,"hrv_avg":52.0,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":7.95,"sleep_score":73.0,"sleep_deep_hours":1.5,"sleep_rem_hours":0.63,"sleep_light_hours":5.82,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-05","resting_hr":52.0,"steps":18430.0,"distance_m":11138.0,"stress_avg":35.0,"stress_max":87.0,"bb_low":9.0,"bb_high":52.0,"bb_last":15.0,"hrv_avg":50.0,"hrv_baseline_low":61.0,"hrv_baseline_high":87.0,"hrv_status":"BALANCED","sleep_hours":6.42,"sleep_score":72.0,"sleep_deep_hours":2.03,"sleep_rem_hours":0.93,"sleep_light_hours":3.45,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-06","resting_hr":52.0,"steps":13392.0,"distance_m":7395.0,"stress_avg":35.0,"stress_max":91.0,"bb_low":14.0,"bb_high":73.0,"bb_last":17.0,"hrv_avg":54.0,"hrv_baseline_low":62.0,"hrv_baseline_high":86.0,"hrv_status":"BALANCED","sleep_hours":6.63,"sleep_score":71.0,"sleep_deep_hours":1.52,"sleep_rem_hours":0.62,"sleep_light_hours":4.5,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-07","resting_hr":48.0,"steps":3607.0,"distance_m":2898.0,"stress_avg":25.0,"stress_max":86.0,"bb_low":17.0,"bb_high":99.0,"bb_last":30.0,"hrv_avg":68.0,"hrv_baseline_low":63.0,"hrv_baseline_high":86.0,"hrv_status":"UNBALANCED","sleep_hours":7.78,"sleep_score":86.0,"sleep_deep_hours":2.02,"sleep_rem_hours":1.3,"sleep_light_hours":4.47,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-08","resting_hr":47.0,"steps":5367.0,"distance_m":4298.0,"stress_avg":30.0,"stress_max":93.0,"bb_low":22.0,"bb_high":100.0,"bb_last":22.0,"hrv_avg":67.0,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"UNBALANCED","sleep_hours":8.13,"sleep_score":95.0,"sleep_deep_hours":2.15,"sleep_rem_hours":1.55,"sleep_light_hours":4.43,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-09","resting_hr":48.0,"steps":8956.0,"distance_m":8793.0,"stress_avg":34.0,"stress_max":96.0,"bb_low":15.0,"bb_high":97.0,"bb_last":15.0,"hrv_avg":68.0,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"UNBALANCED","sleep_hours":7.85,"sleep_score":92.0,"sleep_deep_hours":1.82,"sleep_rem_hours":1.5,"sleep_light_hours":4.53,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null},{"date":"2026-09-10","resting_hr":49.0,"steps":115.0,"distance_m":92.0,"stress_avg":15.0,"stress_max":86.0,"bb_low":15.0,"bb_high":90.0,"bb_last":80.0,"hrv_avg":71.0,"hrv_baseline_low":62.0,"hrv_baseline_high":87.0,"hrv_status":"UNBALANCED","sleep_hours":7.03,"sleep_score":80.0,"sleep_deep_hours":1.3,"sleep_rem_hours":0.93,"sleep_light_hours":4.8,"training_readiness":null,"training_readiness_level":null,"training_readiness_feedback":null}],"activities":[{"date":"2026-09-09","start_time":"2026-09-09 19:17:34","activity_id":24300408949,"name":"München Laufen","type":"running","distance_km":6.205,"duration_s":2017.22998046875,"pace_s_per_km":325.1,"avg_hr":141.0,"max_hr":156.0,"aerobic_te":3.0,"anaerobic_te":0.0,"calories":402.0},{"date":"2026-09-06","start_time":"2026-09-06 12:21:44","activity_id":24258962136,"name":"Tennis","type":"tennis_v2","distance_km":0.486,"duration_s":7260.06005859375,"pace_s_per_km":14937.8,"avg_hr":104.0,"max_hr":178.0,"aerobic_te":1.100000023841858,"anaerobic_te":1.899999976158142,"calories":616.0},{"date":"2026-09-06","start_time":"2026-09-06 10:54:12","activity_id":24256407107,"name":"Leutasch Wandern","type":"hiking","distance_km":2.563,"duration_s":2234.52197265625,"pace_s_per_km":871.9,"avg_hr":111.0,"max_hr":130.0,"aerobic_te":1.100000023841858,"anaerobic_te":0.0,"calories":232.0},{"date":"2026-09-05","start_time":"2026-09-05 19:32:19","activity_id":24251860379,"name":"Tennis","type":"tennis_v2","distance_km":0.486,"duration_s":7518.64697265625,"pace_s_per_km":15455.8,"avg_hr":106.0,"max_hr":165.0,"aerobic_te":1.7000000476837158,"anaerobic_te":2.0,"calories":646.0},{"date":"2026-09-05","start_time":"2026-09-05 12:38:54","activity_id":24247459224,"name":"Leutasch Wandern","type":"hiking","distance_km":6.776,"duration_s":8370.9033203125,"pace_s_per_km":1235.4,"avg_hr":91.0,"max_hr":135.0,"aerobic_te":1.0,"anaerobic_te":0.0,"calories":550.0},{"date":"2026-09-04","start_time":"2026-09-04 20:14:28","activity_id":24239262367,"name":"Tennis","type":"tennis_v2","distance_km":0.572,"duration_s":7363.39208984375,"pace_s_per_km":12862.5,"avg_hr":113.0,"max_hr":162.0,"aerobic_te":2.0999999046325684,"anaerobic_te":2.0999999046325684,"calories":697.0},{"date":"2026-09-04","start_time":"2026-09-04 13:53:18","activity_id":24235614190,"name":"München Rennradfahren","type":"road_biking","distance_km":58.616,"duration_s":7914.880859375,"pace_s_per_km":135.0,"avg_hr":144.0,"max_hr":169.0,"aerobic_te":null,"anaerobic_te":null,"calories":1167.0},{"date":"2026-09-03","start_time":"2026-09-03 19:31:50","activity_id":24226473409,"name":"München Laufen","type":"running","distance_km":4.179,"duration_s":1672.4139404296875,"pace_s_per_km":400.2,"avg_hr":121.0,"max_hr":133.0,"aerobic_te":2.0,"anaerobic_te":0.0,"calories":263.0},{"date":"2026-08-28","start_time":"2026-08-28 12:56:07","activity_id":24148034341,"name":"Tennis","type":"tennis_v2","distance_km":0.417,"duration_s":6434.1220703125,"pace_s_per_km":15434.7,"avg_hr":120.0,"max_hr":222.0,"aerobic_te":2.299999952316284,"anaerobic_te":2.0,"calories":672.0},{"date":"2026-08-28","start_time":"2026-08-28 10:19:21","activity_id":24145844150,"name":"Bardolino Laufen","type":"running","distance_km":7.408,"duration_s":2480.125,"pace_s_per_km":334.8,"avg_hr":150.0,"max_hr":173.0,"aerobic_te":3.5,"anaerobic_te":0.0,"calories":513.0},{"date":"2026-08-26","start_time":"2026-08-26 18:35:36","activity_id":24127996738,"name":"München Rennradfahren","type":"road_biking","distance_km":58.591,"duration_s":7621.7080078125,"pace_s_per_km":130.1,"avg_hr":129.0,"max_hr":156.0,"aerobic_te":null,"anaerobic_te":null,"calories":912.0},{"date":"2026-08-23","start_time":"2026-08-23 17:01:37","activity_id":24087939079,"name":"Nürnberg Tennis","type":"tennis_v2","distance_km":2.56,"duration_s":5305.69384765625,"pace_s_per_km":2072.7,"avg_hr":117.0,"max_hr":153.0,"aerobic_te":2.0,"anaerobic_te":1.2000000476837158,"calories":528.0},{"date":"2026-08-23","start_time":"2026-08-23 10:48:51","activity_id":24084150616,"name":"Feucht Rennradfahren","type":"road_biking","distance_km":69.685,"duration_s":10244.814453125,"pace_s_per_km":147.0,"avg_hr":136.0,"max_hr":168.0,"aerobic_te":null,"anaerobic_te":null,"calories":1317.0},{"date":"2026-08-22","start_time":"2026-08-22 10:01:37","activity_id":24069506900,"name":"Wendelstein Laufen","type":"running","distance_km":7.168,"duration_s":2827.569091796875,"pace_s_per_km":394.5,"avg_hr":130.0,"max_hr":138.0,"aerobic_te":2.4000000953674316,"anaerobic_te":0.0,"calories":465.0},{"date":"2026-08-21","start_time":"2026-08-21 16:25:00","activity_id":24068570026,"name":"Peloton","type":"indoor_cycling","distance_km":21.0,"duration_s":2700.0,"pace_s_per_km":128.6,"avg_hr":133.0,"max_hr":165.0,"aerobic_te":null,"anaerobic_te":null,"calories":581.0},{"date":"2026-08-20","start_time":"2026-08-20 12:02:13","activity_id":24047124162,"name":"München - Schwelle","type":"running","distance_km":9.209,"duration_s":2629.7119140625,"pace_s_per_km":285.6,"avg_hr":159.0,"max_hr":179.0,"aerobic_te":4.099999904632568,"anaerobic_te":0.6000000238418579,"calories":565.0},{"date":"2026-08-19","start_time":"2026-08-19 18:16:28","activity_id":24039551089,"name":"München Radfahren","type":"cycling","distance_km":12.458,"duration_s":2413.97900390625,"pace_s_per_km":193.8,"avg_hr":111.0,"max_hr":135.0,"aerobic_te":0.800000011920929,"anaerobic_te":0.0,"calories":241.0},{"date":"2026-08-19","start_time":"2026-08-19 12:22:05","activity_id":24034359669,"name":"Schwimmbad","type":"lap_swimming","distance_km":1.026,"duration_s":1489.6500244140625,"pace_s_per_km":1451.9,"avg_hr":124.0,"max_hr":146.0,"aerobic_te":2.0,"anaerobic_te":0.6000000238418579,"calories":226.0},{"date":"2026-08-18","start_time":"2026-08-18 12:18:11","activity_id":24020968579,"name":"München Laufen","type":"running","distance_km":6.047,"duration_s":1848.8380126953125,"pace_s_per_km":305.7,"avg_hr":154.0,"max_hr":172.0,"aerobic_te":3.4000000953674316,"anaerobic_te":0.0,"calories":390.0},{"date":"2026-08-17","start_time":"2026-08-17 19:00:59","activity_id":24013037205,"name":"Schwimmbad","type":"lap_swimming","distance_km":1.098,"duration_s":1502.998046875,"pace_s_per_km":1368.9,"avg_hr":130.0,"max_hr":156.0,"aerobic_te":2.200000047683716,"anaerobic_te":1.2000000476837158,"calories":242.0},{"date":"2026-08-16","start_time":"2026-08-16 16:08:12","activity_id":24001840399,"name":"München Radfahren","type":"cycling","distance_km":70.89,"duration_s":10132.1015625,"pace_s_per_km":142.9,"avg_hr":123.0,"max_hr":169.0,"aerobic_te":2.5999999046325684,"anaerobic_te":1.100000023841858,"calories":1103.0},{"date":"2026-08-15","start_time":"2026-08-15 11:07:50","activity_id":23985055541,"name":"München Tennis","type":"tennis_v2","distance_km":1.473,"duration_s":3751.7880859375,"pace_s_per_km":2546.3,"avg_hr":112.0,"max_hr":153.0,"aerobic_te":1.399999976158142,"anaerobic_te":0.800000011920929,"calories":364.0},{"date":"2026-08-14","start_time":"2026-08-14 12:05:09","activity_id":23972823707,"name":"München - Basis","type":"running","distance_km":5.359,"duration_s":1801.885009765625,"pace_s_per_km":336.2,"avg_hr":142.0,"max_hr":160.0,"aerobic_te":2.799999952316284,"anaerobic_te":0.0,"calories":346.0},{"date":"2026-08-13","start_time":"2026-08-13 18:03:07","activity_id":23965903995,"name":"München Radfahren","type":"cycling","distance_km":58.418,"duration_s":7382.80810546875,"pace_s_per_km":126.4,"avg_hr":139.0,"max_hr":178.0,"aerobic_te":3.200000047683716,"anaerobic_te":2.200000047683716,"calories":1080.0},{"date":"2026-08-12","start_time":"2026-08-12 12:02:35","activity_id":23947788308,"name":"München - Schwelle","type":"running","distance_km":8.174,"duration_s":2368.64599609375,"pace_s_per_km":289.8,"avg_hr":151.0,"max_hr":176.0,"aerobic_te":3.5999999046325684,"anaerobic_te":0.0,"calories":502.0},{"date":"2026-08-11","start_time":"2026-08-11 19:58:09","activity_id":23940571073,"name":"Schwimmbad","type":"lap_swimming","distance_km":1.044,"duration_s":1263.1409912109375,"pace_s_per_km":1209.9,"avg_hr":128.0,"max_hr":161.0,"aerobic_te":2.0999999046325684,"anaerobic_te":1.7999999523162842,"calories":212.0},{"date":"2026-08-10","start_time":"2026-08-10 18:40:42","activity_id":23927061226,"name":"München Radfahren","type":"cycling","distance_km":57.467,"duration_s":6935.81005859375,"pace_s_per_km":120.7,"avg_hr":149.0,"max_hr":171.0,"aerobic_te":4.0,"anaerobic_te":2.299999952316284,"calories":1164.0},{"date":"2026-08-09","start_time":"2026-08-09 12:54:04","activity_id":23910203343,"name":"Bardolino Laufen","type":"running","distance_km":4.495,"duration_s":1698.3599853515625,"pace_s_per_km":377.8,"avg_hr":148.0,"max_hr":169.0,"aerobic_te":3.0,"anaerobic_te":0.10000000149011612,"calories":315.0},{"date":"2026-08-08","start_time":"2026-08-08 10:01:25","activity_id":23898997337,"name":"Tennis","type":"tennis_v2","distance_km":0.549,"duration_s":5481.8359375,"pace_s_per_km":9990.2,"avg_hr":135.0,"max_hr":168.0,"aerobic_te":3.0,"anaerobic_te":2.200000047683716,"calories":778.0},{"date":"2026-08-07","start_time":"2026-08-07 08:52:20","activity_id":23884112498,"name":"Tennis","type":"tennis_v2","distance_km":0.441,"duration_s":5813.01611328125,"pace_s_per_km":13167.1,"avg_hr":125.0,"max_hr":161.0,"aerobic_te":2.5,"anaerobic_te":2.200000047683716,"calories":661.0},{"date":"2026-08-06","start_time":"2026-08-06 18:07:38","activity_id":23877217119,"name":"Bardolino Laufen","type":"running","distance_km":4.566,"duration_s":2006.345947265625,"pace_s_per_km":439.4,"avg_hr":146.0,"max_hr":173.0,"aerobic_te":2.5,"anaerobic_te":0.0,"calories":334.0},{"date":"2026-08-06","start_time":"2026-08-06 08:06:38","activity_id":23871063121,"name":"Schwimmbad","type":"lap_swimming","distance_km":1.239,"duration_s":1587.9239501953125,"pace_s_per_km":1281.6,"avg_hr":108.0,"max_hr":135.0,"aerobic_te":0.8999999761581421,"anaerobic_te":0.0,"calories":188.0},{"date":"2026-08-03","start_time":"2026-08-03 19:07:20","activity_id":23840393481,"name":"München Rennradfahren","type":"road_biking","distance_km":58.524,"duration_s":7654.47607421875,"pace_s_per_km":130.8,"avg_hr":137.0,"max_hr":167.0,"aerobic_te":null,"anaerobic_te":null,"calories":1042.0},{"date":"2026-08-01","start_time":"2026-08-01 16:34:23","activity_id":23813652182,"name":"Feucht Radfahren","type":"cycling","distance_km":5.823,"duration_s":767.6300048828125,"pace_s_per_km":131.8,"avg_hr":148.0,"max_hr":161.0,"aerobic_te":2.200000047683716,"anaerobic_te":0.699999988079071,"calories":152.0},{"date":"2026-08-01","start_time":"2026-08-01 13:03:13","activity_id":23811877522,"name":"Fürth Tennis","type":"tennis_v2","distance_km":2.468,"duration_s":5342.09423828125,"pace_s_per_km":2164.3,"avg_hr":124.0,"max_hr":160.0,"aerobic_te":2.299999952316284,"anaerobic_te":2.0,"calories":609.0},{"date":"2026-07-31","start_time":"2026-07-31 17:33:20","activity_id":23803355789,"name":"München Rennradfahren","type":"road_biking","distance_km":44.449,"duration_s":6745.0732421875,"pace_s_per_km":151.7,"avg_hr":122.0,"max_hr":157.0,"aerobic_te":null,"anaerobic_te":null,"calories":704.0},{"date":"2026-07-30","start_time":"2026-07-30 19:00:09","activity_id":23792561070,"name":"Schwimmbad","type":"lap_swimming","distance_km":1.525,"duration_s":2006.6400146484375,"pace_s_per_km":1315.8,"avg_hr":119.0,"max_hr":156.0,"aerobic_te":2.0,"anaerobic_te":0.6000000238418579,"calories":327.0},{"date":"2026-07-29","start_time":"2026-07-29 19:05:02","activity_id":23779206433,"name":"Schwimmbad","type":"lap_swimming","distance_km":1.008,"duration_s":1233.0069580078125,"pace_s_per_km":1223.2,"avg_hr":122.0,"max_hr":153.0,"aerobic_te":1.7999999523162842,"anaerobic_te":0.8999999761581421,"calories":181.0},{"date":"2026-07-28","start_time":"2026-07-28 17:38:06","activity_id":23766562094,"name":"München Rennradfahren","type":"road_biking","distance_km":58.479,"duration_s":7499.2578125,"pace_s_per_km":128.2,"avg_hr":145.0,"max_hr":171.0,"aerobic_te":null,"anaerobic_te":null,"calories":1171.0},{"date":"2026-07-27","start_time":"2026-07-27 19:42:00","activity_id":23753994826,"name":"München - Tempo","type":"running","distance_km":8.099,"duration_s":2393.077880859375,"pace_s_per_km":295.5,"avg_hr":154.0,"max_hr":178.0,"aerobic_te":3.5999999046325684,"anaerobic_te":0.10000000149011612,"calories":491.0},{"date":"2026-07-25","start_time":"2026-07-25 11:12:20","activity_id":23732299476,"name":"Maria Alm am Steinernen Meer Wandern","type":"hiking","distance_km":9.265,"duration_s":8595.5595703125,"pace_s_per_km":927.8,"avg_hr":105.0,"max_hr":154.0,"aerobic_te":2.0,"anaerobic_te":0.10000000149011612,"calories":730.0},{"date":"2026-07-24","start_time":"2026-07-24 17:23:52","activity_id":23717166089,"name":"München Laufen","type":"running","distance_km":6.528,"duration_s":2304.10888671875,"pace_s_per_km":353.0,"avg_hr":136.0,"max_hr":168.0,"aerobic_te":2.799999952316284,"anaerobic_te":0.0,"calories":407.0},{"date":"2026-07-23","start_time":"2026-07-23 18:50:43","activity_id":23706161815,"name":"München Laufen","type":"running","distance_km":5.814,"duration_s":2201.160888671875,"pace_s_per_km":378.6,"avg_hr":127.0,"max_hr":147.0,"aerobic_te":2.4000000953674316,"anaerobic_te":0.0,"calories":360.0},{"date":"2026-07-20","start_time":"2026-07-20 19:53:01","activity_id":23668734679,"name":"München Laufen","type":"running","distance_km":6.123,"duration_s":2403.635986328125,"pace_s_per_km":392.6,"avg_hr":126.0,"max_hr":133.0,"aerobic_te":2.200000047683716,"anaerobic_te":0.0,"calories":376.0},{"date":"2026-07-18","start_time":"2026-07-18 10:24:01","activity_id":23639471780,"name":"Wendelstein - Lauras erste Intervalle","type":"running","distance_km":6.654,"duration_s":2760.29296875,"pace_s_per_km":414.9,"avg_hr":133.0,"max_hr":166.0,"aerobic_te":2.5,"anaerobic_te":2.5999999046325684,"calories":405.0},{"date":"2026-07-17","start_time":"2026-07-17 17:55:35","activity_id":23633934503,"name":"München Rennradfahren","type":"road_biking","distance_km":58.184,"duration_s":8714.74609375,"pace_s_per_km":149.8,"avg_hr":126.0,"max_hr":155.0,"aerobic_te":null,"anaerobic_te":null,"calories":962.0},{"date":"2026-07-15","start_time":"2026-07-15 18:58:47","activity_id":23610061139,"name":"München Laufen","type":"running","distance_km":5.994,"duration_s":2412.306884765625,"pace_s_per_km":402.5,"avg_hr":138.0,"max_hr":146.0,"aerobic_te":2.4000000953674316,"anaerobic_te":0.0,"calories":401.0},{"date":"2026-07-15","start_time":"2026-07-15 17:41:56","activity_id":23608946147,"name":"München Laufen","type":"running","distance_km":6.067,"duration_s":1975.7060546875,"pace_s_per_km":325.6,"avg_hr":155.0,"max_hr":178.0,"aerobic_te":3.200000047683716,"anaerobic_te":2.5999999046325684,"calories":397.0},{"date":"2026-07-13","start_time":"2026-07-13 17:57:35","activity_id":23583822317,"name":"Kirchberg in Tirol - Schwelle","type":"running","distance_km":6.498,"duration_s":2009.5379638671875,"pace_s_per_km":309.3,"avg_hr":158.0,"max_hr":184.0,"aerobic_te":3.5,"anaerobic_te":0.6000000238418579,"calories":423.0}],"built":"2026-09-10T12:20:01"};
+const REDUCE = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const COL = {hrv:"#3D7BFF", puls:"#F0402F", schlaf:"#FFC400", energie:"#00C46A", mark:"#FFFFFF"};
+const $ = (s,r=document)=>r.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+
+/* ---------- Zahlen-Helfer ---------- */
+const isNum = v => typeof v === "number" && isFinite(v);
+function mean(a){ a=a.filter(isNum); return a.length? a.reduce((x,y)=>x+y,0)/a.length : null; }
+function sd(a){ a=a.filter(isNum); if(a.length<2) return null; const m=mean(a);
+  return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1)); }
+function fmt(v,d=0){ if(!isNum(v)) return "keine daten"; return d>0? v.toFixed(d) : String(Math.round(v)); }
+function hm(sec){ if(!isNum(sec)) return "–"; sec=Math.round(sec);
+  return Math.floor(sec/3600)+":"+String(Math.floor(sec%3600/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0"); }
+function paceStr(s){ if(!isNum(s)) return "–"; s=Math.round(s); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+function isoWeek(d){ const t=new Date(d+"T00:00:00"); const day=(t.getDay()+6)%7;
+  t.setDate(t.getDate()-day+3); const first=new Date(t.getFullYear(),0,4);
+  const wk=1+Math.round(((t-first)/86400000 - 3 + ((first.getDay()+6)%7))/7);
+  return t.getFullYear()+"-KW"+String(wk).padStart(2,"0"); }
+
+/* ---------- SVG-Bausteine ---------- */
+function svg(w,h){ const s=document.createElementNS(NS,"svg");
+  s.setAttribute("viewBox",`0 0 ${w} ${h}`); s.setAttribute("preserveAspectRatio","xMidYMid meet");
+  return s; }
+function el(tag,attrs){ const e=document.createElementNS(NS,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+function scaleLin(dmin,dmax,rmin,rmax){ if(dmin===dmax) dmax=dmin+1;
+  return v => rmin + (v-dmin)/(dmax-dmin)*(rmax-rmin); }
+
+/* zeichnet eine Linie mit Lücken bei fehlenden Werten; animiert per gemessener Pfadlänge */
+function drawLine(parent,pts,color){
+  let d="", pen=false;
+  for(const p of pts){
+    if(p.y==null){ pen=false; continue; }
+    d += (pen? " L":" M") + p.x.toFixed(2)+" "+p.y.toFixed(2); pen=true;
+  }
+  if(!d) return;
+  const path=el("path",{d:d.trim(),fill:"none",stroke:color,"stroke-width":"1.6",
+    "vector-effect":"non-scaling-stroke","stroke-linejoin":"round"});
+  path.classList.add("anim-line");
+  parent.appendChild(path);
+  if(!REDUCE){
+    const len=path.getTotalLength();               // gemessen, nicht geschätzt
+    path.style.strokeDasharray=len; path.style.strokeDashoffset=len;
+    path.getBoundingClientRect();
+    path.style.transition="stroke-dashoffset 900ms ease-out";
+    requestAnimationFrame(()=>{ path.style.strokeDashoffset="0"; });
+  }
+}
+function squareMarker(parent,x,y,color,size=4){
+  parent.appendChild(el("rect",{x:x-size/2,y:y-size/2,width:size,height:size,fill:color})); }
+
+/* ---------- Fadenkreuz + Tooltip ---------- */
+const tip = $("#tooltip");
+function attachHover(s, W, H, pad, xs, days, render){
+  const overlay=el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b,
+    fill:"transparent"});
+  const cross=el("line",{class:"cross",y1:pad.t,y2:H-pad.b,x1:pad.l,x2:pad.l,visibility:"hidden"});
+  s.appendChild(cross); s.appendChild(overlay);
+  function move(ev){
+    const r=s.getBoundingClientRect();
+    const px=(ev.clientX-r.left)/r.width*W;
+    let bi=0,bd=1e9;
+    days.forEach((d,i)=>{ const dx=Math.abs(xs(i)-px); if(dx<bd){bd=dx;bi=i;} });
+    const gx=xs(bi);
+    cross.setAttribute("x1",gx); cross.setAttribute("x2",gx); cross.setAttribute("visibility","visible");
+    tip.style.display="block";
+    tip.style.left=Math.min(ev.clientX+14, window.innerWidth-250)+"px";
+    tip.style.top=(ev.clientY+14)+"px";
+    tip.innerHTML=render(days[bi]);
+  }
+  overlay.addEventListener("mousemove",move);
+  overlay.addEventListener("mouseleave",()=>{ cross.setAttribute("visibility","hidden"); tip.style.display="none"; });
+}
+
+/* ---------- ein Liniendiagramm ---------- */
+function lineChart(box, days, key, color, opts={}){
+  box.innerHTML="";
+  const W=opts.big?860:420, H=opts.big?360:240;
+  const pad={l:38,r:44,t:14,b:26};
+  const s=svg(W,H);
+  const vals=days.map(d=>d[key]);
+  const present=vals.filter(isNum);
+  if(present.length<2){ box.appendChild(s);
+    s.appendChild(el("text",{x:W/2,y:H/2,"text-anchor":"middle",fill:"#9A9AA0"}))
+      .textContent="zu wenig daten im zeitraum"; return; }
+  let lo=Math.min(...present), hi=Math.max(...present);
+  let band=null;
+  if(opts.band){ const m=mean(present), dv=sd(present);
+    if(isNum(m)&&isNum(dv)){ band={m,lo:m-dv,hi:m+dv}; lo=Math.min(lo,band.lo); hi=Math.max(hi,band.hi); } }
+  if(isNum(opts.marker)){ lo=Math.min(lo,opts.marker); hi=Math.max(hi,opts.marker); }
+  const padv=(hi-lo)*0.12||1; lo-=padv; hi+=padv;
+  const xs=i=>pad.l+(days.length<=1?0:i/(days.length-1)*(W-pad.l-pad.r));
+  const ys=scaleLin(lo,hi,H-pad.b,pad.t);
+
+  /* Gitter + Achse */
+  for(let g=0;g<=4;g++){ const gv=lo+(hi-lo)*g/4, y=ys(gv);
+    s.appendChild(el("line",{class:"gridline",x1:pad.l,x2:W-pad.r,y1:y,y2:y}));
+    s.appendChild(el("text",{x:pad.l-6,y:y+3,"text-anchor":"end",class:"cap"})).textContent=fmt(gv,0);
+  }
+  s.appendChild(el("line",{class:"axis",x1:pad.l,x2:pad.l,y1:pad.t,y2:H-pad.b}));
+
+  if(band){
+    s.appendChild(el("rect",{class:"band",x:pad.l,y:ys(band.hi),width:W-pad.l-pad.r,height:Math.max(0,ys(band.lo)-ys(band.hi))}));
+    s.appendChild(el("line",{class:"bandline",x1:pad.l,x2:W-pad.r,y1:ys(band.m),y2:ys(band.m)}));
+  }
+  if(isNum(opts.marker)){
+    s.appendChild(el("line",{x1:pad.l,x2:W-pad.r,y1:ys(opts.marker),y2:ys(opts.marker),
+      stroke:color,"stroke-width":"1","stroke-opacity":"0.55"}));
+  }
+
+  const pts=days.map((d,i)=>({x:xs(i),y:isNum(d[key])?ys(d[key]):null}));
+  drawLine(s,pts,color);
+
+  /* letzter vorhandener Punkt: weiß markieren + direkt beschriften */
+  let li=-1; for(let i=days.length-1;i>=0;i--){ if(isNum(days[i][key])){ li=i; break; } }
+  if(li>=0){
+    const x=xs(li), y=ys(days[li][key]);
+    squareMarker(s,x,y,COL.mark,6);
+    s.appendChild(el("text",{x:Math.min(x+8,W-4),y:y-8,class:"lastlabel","text-anchor":"end"}))
+      .textContent=fmt(days[li][key],opts.dec||0)+(opts.unit?(" "+opts.unit):"");
+  }
+  /* x-Beschriftung: erster & letzter Tag */
+  s.appendChild(el("text",{x:pad.l,y:H-8,class:"cap"})).textContent=days[0].date.slice(5);
+  s.appendChild(el("text",{x:W-pad.r,y:H-8,class:"cap","text-anchor":"end"})).textContent=days[days.length-1].date.slice(5);
+
+  box.appendChild(s);
+  attachHover(s,W,H,pad,xs,days,d=>{
+    const v=d[key];
+    return `<div class="t-d">${d.date}</div>${opts.title||key}: <b>${isNum(v)?fmt(v,opts.dec||0)+(opts.unit?(" "+opts.unit):""):"keine daten"}</b>`;
+  });
+}
+
+/* ---------- Balkendiagramm (Schlaf, Wochen-km) ---------- */
+function barChart(box, items, opts={}){
+  box.innerHTML="";
+  const W=420,H=240,pad={l:38,r:44,t:14,b:30};
+  const s=svg(W,H);
+  const vals=items.map(it=>it.v).filter(isNum);
+  if(!vals.length){ box.appendChild(s); return; }
+  let hi=Math.max(...vals, opts.marker||0); hi*=1.15;
+  const bw=(W-pad.l-pad.r)/items.length;
+  const ys=scaleLin(0,hi,H-pad.b,pad.t);
+  for(let g=0;g<=4;g++){ const gv=hi*g/4,y=ys(gv);
+    s.appendChild(el("line",{class:"gridline",x1:pad.l,x2:W-pad.r,y1:y,y2:y}));
+    s.appendChild(el("text",{x:pad.l-6,y:y+3,"text-anchor":"end",class:"cap"})).textContent=fmt(gv,opts.dec||0);
+  }
+  s.appendChild(el("line",{class:"axis",x1:pad.l,x2:pad.l,y1:pad.t,y2:H-pad.b}));
+  if(isNum(opts.marker)){
+    s.appendChild(el("line",{x1:pad.l,x2:W-pad.r,y1:ys(opts.marker),y2:ys(opts.marker),
+      stroke:opts.color,"stroke-width":"1","stroke-opacity":"0.6"}));
+  }
+  items.forEach((it,i)=>{
+    if(!isNum(it.v)) return;
+    const x=pad.l+i*bw+bw*0.16, w=bw*0.68;
+    const y=ys(it.v), h=H-pad.b-y;
+    const fill=it.mark?COL.mark:opts.color;
+    const rect=el("rect",{x,y,width:w,height:h,fill});
+    if(!REDUCE){ rect.classList.add("anim-bar");
+      rect.style.transformOrigin=`0px ${H-pad.b}px`; rect.style.transform="scaleY(0)";
+      rect.style.transition=`transform 700ms ease-out ${i*14}ms`;
+      requestAnimationFrame(()=>rect.style.transform="scaleY(1)");
+    }
+    s.appendChild(rect);
+  });
+  /* letzten Wert direkt beschriften */
+  let li=-1; for(let i=items.length-1;i>=0;i--){ if(isNum(items[i].v)){li=i;break;} }
+  if(li>=0){ const x=pad.l+li*bw+bw*0.5, y=ys(items[li].v);
+    s.appendChild(el("text",{x:Math.min(x,W-pad.r),y:y-6,class:"lastlabel","text-anchor":"middle"}))
+      .textContent=fmt(items[li].v,opts.dec||0);
+  }
+  s.appendChild(el("text",{x:pad.l,y:H-8,class:"cap"})).textContent=items[0].label;
+  s.appendChild(el("text",{x:W-pad.r,y:H-8,class:"cap","text-anchor":"end"})).textContent=items[items.length-1].label;
+  box.appendChild(s);
+  const xs=i=>pad.l+i*bw+bw*0.5;
+  attachHover(s,W,H,pad,xs,items.map(it=>({date:it.label,v:it.v})),d=>
+    `<div class="t-d">${d.date}</div>${opts.title}: <b>${isNum(d.v)?fmt(d.v,opts.dec||0)+(opts.unit?" "+opts.unit:""):"keine daten"}</b>`);
+}
+
+/* ---------- Body Battery: Tagesspanne tief→hoch ---------- */
+function rangeChart(box, days){
+  box.innerHTML="";
+  const W=420,H=240,pad={l:38,r:20,t:14,b:30};
+  const s=svg(W,H);
+  const any=days.some(d=>isNum(d.bb_low)&&isNum(d.bb_high));
+  if(!any){ box.appendChild(s); return; }
+  const ys=scaleLin(0,100,H-pad.b,pad.t);
+  const bw=(W-pad.l-pad.r)/days.length;
+  for(let g=0;g<=4;g++){ const gv=g*25,y=ys(gv);
+    s.appendChild(el("line",{class:"gridline",x1:pad.l,x2:W-pad.r,y1:y,y2:y}));
+    s.appendChild(el("text",{x:pad.l-6,y:y+3,"text-anchor":"end",class:"cap"})).textContent=gv;
+  }
+  s.appendChild(el("line",{class:"axis",x1:pad.l,x2:pad.l,y1:pad.t,y2:H-pad.b}));
+  days.forEach((d,i)=>{
+    if(!isNum(d.bb_low)||!isNum(d.bb_high)) return;
+    const x=pad.l+i*bw+bw*0.32, w=Math.max(2,bw*0.36);
+    const yH=ys(d.bb_high), yL=ys(d.bb_low);
+    const weak = d.bb_high < 40;
+    const rect=el("rect",{x,y:yH,width:w,height:Math.max(1,yL-yH),fill:weak?COL.mark:COL.energie});
+    if(!REDUCE){ rect.classList.add("anim-bar");
+      rect.style.transformOrigin=`0px ${(yH+yL)/2}px`; rect.style.transform="scaleY(0)";
+      rect.style.transition=`transform 700ms ease-out ${i*14}ms`;
+      requestAnimationFrame(()=>rect.style.transform="scaleY(1)");
+    }
+    s.appendChild(rect);
+  });
+  s.appendChild(el("text",{x:pad.l,y:H-8,class:"cap"})).textContent=days[0].date.slice(5);
+  s.appendChild(el("text",{x:W-pad.r,y:H-8,class:"cap","text-anchor":"end"})).textContent=days[days.length-1].date.slice(5);
+  box.appendChild(s);
+  const xs=i=>pad.l+i*bw+bw*0.5;
+  attachHover(s,W,H,pad,xs,days,d=>
+    `<div class="t-d">${d.date}</div>body battery: <b>${isNum(d.bb_low)?fmt(d.bb_low)+" → "+fmt(d.bb_high):"keine daten"}</b>`);
+}
+
+/* ---------- Kacheln ---------- */
+function sparkline(box,arr,color){
+  const W=240,H=44,s=svg(W,H);
+  s.setAttribute("preserveAspectRatio","none");   // volle Breite nutzen, Strich bleibt via non-scaling-stroke dünn
+  const present=arr.filter(isNum);
+  if(present.length>=2){
+    const lo=Math.min(...present),hi=Math.max(...present);
+    const xs=i=>arr.length<=1?0:i/(arr.length-1)*W;
+    const ys=scaleLin(lo,hi,H-5,5);
+    const pts=arr.map((v,i)=>({x:xs(i),y:isNum(v)?ys(v):null}));
+    drawLine(s,pts,color);
+    let li=-1; for(let i=arr.length-1;i>=0;i--){ if(isNum(arr[i])){li=i;break;} }
+    if(li>=0){
+      const y=ys(arr[li]), mx=Math.min(xs(li),W-2);
+      s.appendChild(el("line",{x1:mx,x2:mx,y1:Math.max(0,y-4),y2:Math.min(H,y+4),
+        stroke:COL.mark,"stroke-width":"2","vector-effect":"non-scaling-stroke"}));
+    }
+  }
+  box.appendChild(s);
+}
+function renderTiles(days){
+  const cfg=[
+    {k:"hrv_avg",  cls:"hrv",    label:"hrv",     unit:"ms", dec:0},
+    {k:"resting_hr",cls:"puls",  label:"ruhepuls",unit:"bpm",dec:0},
+    {k:"sleep_hours",cls:"schlaf",label:"schlaf", unit:"h",  dec:1},
+    {k:"stress_avg",cls:"energie",label:"stress", unit:"",   dec:0},
+  ];
+  const wrap=$("#tiles"); wrap.innerHTML="";
+  const half=Math.floor(days.length/2);
+  cfg.forEach(c=>{
+    const series=days.map(d=>d[c.k]);
+    const earlier=days.slice(0,half).map(d=>d[c.k]);
+    const later=days.slice(half).map(d=>d[c.k]);
+    const em=mean(earlier), lm=mean(later), s=sd(series);
+    let last=null; for(let i=days.length-1;i>=0;i--){ if(isNum(days[i][c.k])){last=days[i][c.k];break;} }
+    const diff=(isNum(em)&&isNum(lm))?lm-em:null;
+    const flag=(isNum(diff)&&isNum(s)&&s>0)?Math.abs(diff)/s>=0.625:false;   // 0,5–0,75 SD → Mitte
+    const d=document.createElement("div"); d.className="tile";
+    const rounded=isNum(diff)?Number(fmt(Math.abs(diff),c.dec)):null;
+    const arrow=isNum(diff)?(rounded===0?"":(diff>0?"▲ ":"▼ ")):"";
+    d.innerHTML=`<div class="label"><span class="sq ${c.cls}"></span>${c.label}</div>
+      <div class="v num">${isNum(last)?fmt(last,c.dec):"–"}${c.unit?`<span class="u">${c.unit}</span>`:""}</div>
+      <div class="delta ${flag?"flag":""}">${isNum(diff)?(rounded===0?"≈ unverändert vs. vorperiode":arrow+fmt(Math.abs(diff),c.dec)+(c.unit?" "+c.unit:"")+" vs. vorperiode"):"keine vergleichsdaten"}</div>`;
+    const sb=document.createElement("div"); d.appendChild(sb);
+    sparkline(sb, series, COL[c.cls]);
+    wrap.appendChild(d);
+  });
+}
+
+/* ---------- Bereitschaft: trainiere ich heute? ----------
+   Feste 42-Tage-Basis, unabhängig vom 14/30/60-Umschalter.
+   Weiche Schwellen: jedes Signal wird zu einer gleitenden Punktzahl -2..+1,
+   gewichtet gemittelt. Ein einzelner Ausreißer (z.B. 6:59 h Schlaf) zieht kaum
+   runter; nur wenn HRV UND Ruhepuls gemeinsam kippen, wird es "ruhe". */
+function ramp(x,x0,x1,y0,y1){
+  if(x1===x0) return y0;
+  const t=(x-x0)/(x1-x0), y=y0+t*(y1-y0);
+  return Math.max(Math.min(y0,y1),Math.min(Math.max(y0,y1),y));
+}
+/* -2 bei "bad", 0 bei "neutral", +1 bei "good"; linear + gedeckelt */
+function sub1(x,bad,neutral,good){
+  if(!isNum(x)) return null;
+  return x>=neutral ? ramp(x,neutral,good,0,1) : ramp(x,neutral,bad,0,-2);
+}
+
+function readiness(){
+  const RUNT=new Set(["running","trail_running","treadmill_running","track_running"]);
+  const BIKET=new Set(["road_biking","cycling","gravel_cycling","mountain_biking","virtual_ride","indoor_cycling"]);
+  const FOOTT=new Set([...RUNT,"walking","hiking"]);
+
+  // feste Basis: letzte 42 Tage mit Daten
+  const base=ALLDAYS.slice(-42);
+  const rhrBaseline=median(base.map(d=>d.resting_hr).filter(isNum));
+
+  // jüngster Tag mit mindestens HRV oder Ruhepuls
+  let day=null;
+  for(let i=ALLDAYS.length-1;i>=0;i--){
+    const d=ALLDAYS[i];
+    if(isNum(d.hrv_avg)||isNum(d.resting_hr)){ day=d; break; }
+  }
+  if(!day) return {verdict:null};
+
+  // HRV-Band (Garmin liefert es tagesaktuell; sonst aus der Basis schätzen)
+  let bLo=day.hrv_baseline_low, bHi=day.hrv_baseline_high;
+  if(!isNum(bLo)||!isNum(bHi)){
+    const hv=base.map(d=>d.hrv_avg).filter(isNum), m=mean(hv), s=sd(hv);
+    if(isNum(m)&&isNum(s)){ bLo=m-s; bHi=m+s; }
+  }
+
+  // Einzel-Punktzahlen
+  let sHrv=null;
+  if(isNum(day.hrv_avg)&&isNum(bLo)&&isNum(bHi)){
+    sHrv = day.hrv_avg>=bLo ? ramp(day.hrv_avg,bLo,bHi,0.3,1)
+                            : ramp(day.hrv_avg,bLo,bLo-0.15*bLo,0,-2);
+  }
+  const rhrDelta = (isNum(day.resting_hr)&&isNum(rhrBaseline)) ? day.resting_hr-rhrBaseline : null;
+  let sRhr=null;
+  if(isNum(rhrDelta)) sRhr = rhrDelta<=0 ? 1 : rhrDelta<=4 ? ramp(rhrDelta,0,4,1,0) : ramp(rhrDelta,4,10,0,-2);
+  const sHours = sub1(day.sleep_hours,4.5,7.0,7.8);
+  const sScore = sub1(day.sleep_score,25,65,85);
+  let sSleep=null;
+  { const p=[sHours,sScore].filter(isNum); if(p.length) sSleep=mean(p); }
+  const sBB = sub1(isNum(day.bb_last)?day.bb_last:day.bb_high, 15,55,80);
+
+  // gewichteter Schnitt über vorhandene Signale
+  const W=[[sHrv,0.40],[sRhr,0.25],[sSleep,0.20],[sBB,0.15]];
+  let acc=0,wsum=0; W.forEach(([s,w])=>{ if(isNum(s)){ acc+=s*w; wsum+=w; } });
+  const C = wsum>0 ? acc/wsum : null;
+
+  // Körperzustand
+  let state = C===null ? "gelb" : C>=0.30 ? "gruen" : C>=-0.35 ? "gelb" : "rot";
+  const under = isNum(sHrv) && sHrv<=-1.3;              // HRV klar (~>10%) unter Band
+  const rhrHi = isNum(rhrDelta) && rhrDelta>=4;
+  if(under && rhrHi) state="rot";
+  else if(isNum(rhrDelta) && rhrDelta>=10) state="rot";
+  else if(under && state==="gruen") state="gelb";
+
+  // Trainingslast-Kontext
+  const isHard=a=>isNum(a.aerobic_te)&&a.aerobic_te>=3.3&&(RUNT.has(a.type)||BIKET.has(a.type));
+  const dAgo=ds=>Math.round((new Date(day.date+"T00:00:00")-new Date(ds+"T00:00:00"))/86400000);
+  const acts=ACT.filter(a=>a.date&&dAgo(a.date)>=0).sort((a,b)=>a.date<b.date?1:-1);
+  const hardDays=[...new Set(acts.filter(isHard).map(a=>a.date))];
+  const hardYesterday = hardDays.some(hd=>dAgo(hd)<=1);   // gestern oder heute schon hart
+  const hardLast3 = hardDays.filter(hd=>dAgo(hd)<=2).length;
+  const hard2InARow = hardDays.filter(hd=>dAgo(hd)===1||dAgo(hd)===2).length>=2;
+  let daysSinceHard = hardDays.length ? Math.min(...hardDays.map(dAgo)) : 99;
+  let daysSinceLong = 99;
+  acts.forEach(a=>{ if(isNum(a.duration_s)&&a.duration_s>=5400) daysSinceLong=Math.min(daysSinceLong,dAgo(a.date)); });
+  const lastHard = acts.find(isHard);
+  const lastHardKind = lastHard ? (RUNT.has(lastHard.type)?"lauf":BIKET.has(lastHard.type)?"rad":null) : null;
+  const yTypes = acts.filter(a=>dAgo(a.date)===1).map(a=>a.type);
+  const yFoot = yTypes.some(t=>FOOTT.has(t));
+  const yRide = yTypes.some(t=>BIKET.has(t));
+
+  // Verdikt
+  let lvl = state==="gruen"?2 : state==="gelb"?1 : 0;   // 2 hart · 1 locker · 0 ruhe
+  if(state==="gruen" && (hardYesterday || hardLast3>=2)) lvl=1;
+  if(state==="gelb" && hard2InARow) lvl=0;
+
+  // fehlende Kernsignale -> eine Stufe konservativer
+  const missing = !isNum(day.hrv_avg) || sSleep===null;
+  if(missing && lvl>0) lvl--;
+
+  const verdict=["ruhe","locker","hart"][lvl];
+
+  // Ampelpunkte je Signal
+  const dot=s=> s===null ? "grau" : s>=0.2 ? "gruen" : s>-0.9 ? "gelb" : "rot";
+  const dots=[
+    {label:"hrv", s:dot(sHrv)},
+    {label:"ruhepuls", s:dot(sRhr)},
+    {label:"schlaf", s:dot(sSleep)},
+    {label:"body battery", s:dot(sBB)},
+  ];
+
+  // Warum-Zeile: 1–2 wichtigste Signale im Klartext
+  const phr={
+    hrv:{g:"hrv im normalband", y:"hrv leicht unter deinem band", r:"hrv klar unter deinem band"},
+    rhr:{g:"ruhepuls normal", y:`ruhepuls ${rhrDelta>0?"+":""}${isNum(rhrDelta)?Math.round(rhrDelta):"?"} über normal`, r:`ruhepuls +${isNum(rhrDelta)?Math.round(rhrDelta):"?"} über normal`},
+    slp:{g:"gut geschlafen", y:"kurze oder unruhige nacht", r:"deutlich zu wenig schlaf"},
+    bb:{g:"body battery hoch", y:"body battery mäßig", r:"body battery niedrig"},
+  };
+  const rank=[["hrv",sHrv,phr.hrv],["rhr",sRhr,phr.rhr],["slp",sSleep,phr.slp],["bb",sBB,phr.bb]]
+    .filter(x=>isNum(x[1])).sort((a,b)=>Math.abs(a[1])-Math.abs(b[1]));
+  const pick=arr=>arr.map(x=>{ const s=x[1]; const t=s>=0.2?x[2].g:s>-0.9?x[2].y:x[2].r; return t; });
+  let why;
+  if(verdict==="hart"){
+    why = pick(rank.filter(x=>x[1]>0).slice(-2).reverse()).join(", ") || "erholungswerte im grünen bereich";
+    why = why.charAt(0).toUpperCase()+why.slice(1)+".";
+    if(daysSinceHard>=5 && daysSinceHard<90) why+=` die letzten einheiten waren locker bis moderat — heute ist raum für intensität.`;
+  } else {
+    const neg = pick(rank.filter(x=>x[1]<0.2).slice(-2).reverse());
+    why = (neg.length?neg.join(", "):"werte grenzwertig");
+    why = why.charAt(0).toUpperCase()+why.slice(1)+".";
+    if(state==="gruen" && (hardYesterday||hardLast3>=2)) why+=" außerdem war gestern schon eine harte einheit.";
+    if(state==="gelb" && hard2InARow) why+=" zwei harte tage in folge — jetzt bewusst regenerieren.";
+  }
+  if(missing) why+=" (hrv oder schlaf fehlt für heute nacht — einschätzung unsicher, ich schätze vorsichtig.)";
+
+  // Trainingsvorschlag, angepasst an die letzten Tage
+  const advice=trainingAdvice(verdict,{yFoot,yRide,lastHardKind,daysSinceLong,daysSinceHard});
+
+  return {verdict, why, dots, advice, date:day.date, uncertain:missing};
+}
+
+function trainingAdvice(verdict, c){
+  if(verdict==="ruhe"){
+    return "Spaziergang, Mobility, lockeres Ausschwimmen oder leichtes Krafttraining mit wenig Last. "+
+      "Heute keine Intensität und kein langer Umfang — der Körper braucht die Pause.";
+  }
+  if(verdict==="locker"){
+    if(c.yFoot) return "Die Laufbeine schonen: lockere, eher kurze Radrunde ganz entspannt, ruhig schwimmen "+
+      "oder ein Spaziergang. Unter ~75 % HFmax, Plaudertempo.";
+    if(c.yRide) return "Kurzer lockerer Dauerlauf 30–45 min in Zone 2, ruhig schwimmen oder Padel locker. "+
+      "Plaudertempo, nichts erzwingen.";
+    return "Ruhiger Dauerlauf 40–60 min in Zone 2, oder eine große Radrunde ganz entspannt (lang, aber locker), "+
+      "oder technisch schwimmen. Unter ~75 % HFmax — du solltest dich unterhalten können.";
+  }
+  // hart
+  const opts=[];
+  if(c.lastHardKind==="lauf"){
+    opts.push("Rad: kurze Runde schnell mit Berg- oder Kraftintervallen (die Laufbeine sind dafür noch frisch)");
+    opts.push("oder Lauf-Intervalle, wenn du lieber läufst: 5×1000 m bzw. 4×4 min");
+  } else if(c.lastHardKind==="rad"){
+    opts.push("Lauf: Intervalle 5×1000 m oder 25–35 min am Schwellentempo (zur Abwechslung zum Rad)");
+    opts.push("oder Rad hart, wenn die Beine wollen: kurze Runde mit Intervallen");
+  } else {
+    opts.push("Lauf-Intervalle (5×1000 m) oder 25–35 min Schwellenlauf");
+    opts.push("oder Rad: kurze Runde schnell mit Intervallen");
+  }
+  let s="Grünes Licht für eine harte Einheit — "+opts.join(", ")+". Richtwert für die harten Abschnitte: ~90 % HFmax.";
+  if(c.daysSinceLong>=10 && c.daysSinceLong<90)
+    s+=` Eine lange Einheit ist auch mal wieder dran (großer Radtag oder langer Lauf) — dann aber im ruhigen Bereich, nicht beides am selben Tag.`;
+  return s;
+}
+function median(a){ a=a.filter(isNum).slice().sort((x,y)=>x-y); if(!a.length) return null;
+  const m=a.length>>1; return a.length%2?a[m]:(a[m-1]+a[m])/2; }
+
+/* ---------- Gesamt-Render ---------- */
+const ALLDAYS=(RAW.days||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
+const ACT=(RAW.activities||[]);
+/* Laufkilometer = alles zu Fuß; Radfahren zählt hier nicht mit, weil 50-km-Touren
+   die Laufwochen sonst unvergleichbar machen. */
+const FOOT=new Set(["running","trail_running","treadmill_running","track_running",
+  "walking","hiking","indoor_walking"]);
+const footKm=a=>FOOT.has(a.type)&&isNum(a.distance_km)?a.distance_km:0;
+/* Pace (min/km) nur dort zeigen, wo sie etwas heißt — nicht bei Rad, Tennis usw. */
+const PACED=new Set(["running","trail_running","treadmill_running","track_running","walking","hiking"]);
+
+function windowDays(n){
+  if(!ALLDAYS.length) return [];
+  const end=ALLDAYS[ALLDAYS.length-1].date;
+  const endT=new Date(end+"T00:00:00").getTime();
+  const startT=endT-(n-1)*86400000;
+  return ALLDAYS.filter(d=>{ const t=new Date(d.date+"T00:00:00").getTime(); return t>=startT&&t<=endT; });
+}
+
+let READINESS_DONE=false;
+function renderReadiness(){
+  if(READINESS_DONE) return;            // hängt nicht am Zeitfenster
+  READINESS_DONE=true;
+  const R=readiness();
+  const vEl=$("#r-verdict");
+  if(!R.verdict){
+    vEl.textContent="keine daten"; vEl.dataset.v="";
+    $("#r-why").textContent="noch keine nächtlichen werte vorhanden.";
+    return;
+  }
+  vEl.textContent=R.verdict; vEl.dataset.v=R.verdict;
+  $("#r-sq").style.background =
+    R.verdict==="hart"?"var(--energie)":R.verdict==="locker"?"var(--schlaf)":"var(--puls)";
+  $("#r-why").textContent=R.why;
+  $("#r-dots").innerHTML =
+    R.dots.map(d=>`<span class="d" data-s="${d.s}"><i></i>${d.label}</span>`).join("")+
+    `<span class="legend">ampel: grün ok · gelb grenzwertig · rot auffällig · basis: letzte 42 tage · stand ${R.date}</span>`;
+  $("#r-advice").textContent=R.advice;
+}
+
+function render(n){
+  const days=windowDays(n);
+
+  /* Bereitschaft — fest, unabhängig vom Umschalter */
+  renderReadiness();
+
+  /* Randspalte */
+  const lastOf=k=>{ for(let i=days.length-1;i>=0;i--) if(isNum(days[i][k])) return days[i][k]; return null; };
+  const sl=lastOf("sleep_hours");
+  $("#s-sleep").textContent=isNum(sl)?`${Math.floor(sl)}:${String(Math.round((sl%1)*60)).padStart(2,"0")} h`:"–";
+  $("#s-hrv").textContent=isNum(lastOf("hrv_avg"))?fmt(lastOf("hrv_avg"))+" ms":"–";
+  $("#s-rhr").textContent=isNum(lastOf("resting_hr"))?fmt(lastOf("resting_hr"))+" bpm":"–";
+  $("#s-bb").textContent=isNum(lastOf("bb_last"))?fmt(lastOf("bb_last")):"–";
+  const dist7=(()=>{ if(!ALLDAYS.length) return null;
+    const endT=new Date(ALLDAYS[ALLDAYS.length-1].date+"T00:00:00").getTime();
+    const startT=endT-6*86400000; let s=0,any=false;
+    ACT.forEach(a=>{ if(!a.date) return;
+      const t=new Date(a.date+"T00:00:00").getTime();
+      if(t>=startT&&t<=endT&&footKm(a)>0){ s+=footKm(a); any=true; } });
+    return any? s : null; })();
+  $("#s-dist").textContent=isNum(dist7)?dist7.toFixed(1)+" km":"–";
+
+  /* Kacheln */
+  renderTiles(days);
+
+  /* Diagramme */
+  lineChart($("#c-hrv .chartbox"),days,"hrv_avg",COL.hrv,
+    {big:true,band:true,unit:"ms",title:"hrv"});
+  lineChart($("#c-rhr .chartbox"),days,"resting_hr",COL.puls,{unit:"bpm",title:"ruhepuls"});
+  barChart($("#c-sleep .chartbox"),
+    days.map(d=>({label:d.date.slice(5),v:d.sleep_hours,mark:isNum(d.sleep_hours)&&d.sleep_hours<7})),
+    {color:COL.schlaf,marker:7,dec:1,unit:"h",title:"schlaf"});
+  rangeChart($("#c-bb .chartbox"),days);
+
+  /* Wochenkilometer */
+  const weeks={};
+  ACT.forEach(a=>{ if(!a.date||footKm(a)<=0) return;
+    const t=new Date(a.date+"T00:00:00").getTime();
+    if(days.length && t<new Date(days[0].date+"T00:00:00").getTime()) return;
+    const w=isoWeek(a.date); weeks[w]=(weeks[w]||0)+footKm(a); });
+  const wk=Object.keys(weeks).sort();
+  const curWeek=days.length?isoWeek(days[days.length-1].date):null;
+  barChart($("#c-km .chartbox"),
+    wk.map(w=>({label:w.slice(5),v:weeks[w],mark:w===curWeek})),
+    {color:COL.hrv,dec:0,unit:"km",title:"wochendistanz"});
+
+  /* Logbuch */
+  const start=days.length?days[0].date:"0000";
+  const rows=ACT.filter(a=>a.date>=start).slice(0,15);
+  $("#log-tbl tbody").innerHTML = rows.length? rows.map(a=>`<tr>
+    <td>${a.date||"–"}</td><td>${a.name||"–"}</td>
+    <td>${isNum(a.distance_km)?a.distance_km.toFixed(2)+" km":"–"}</td>
+    <td>${hm(a.duration_s)}</td>
+    <td>${PACED.has(a.type)&&isNum(a.pace_s_per_km)?paceStr(a.pace_s_per_km)+" min/km":"–"}</td>
+    <td>${isNum(a.avg_hr)?Math.round(a.avg_hr):"–"}</td>
+    <td>${isNum(a.aerobic_te)?a.aerobic_te.toFixed(1):"–"}</td></tr>`).join("")
+    : `<tr><td colspan="7" class="muted">keine einheiten im zeitraum</td></tr>`;
+
+  /* Rohdaten */
+  $("#raw-tbl tbody").innerHTML = days.slice().reverse().map(d=>{
+    const short = isNum(d.sleep_hours)&&d.sleep_hours<7;
+    return `<tr class="${short?"markrow":""}">
+      <td>${d.date}</td>
+      <td>${isNum(d.hrv_avg)?fmt(d.hrv_avg):"–"}</td>
+      <td>${isNum(d.resting_hr)?fmt(d.resting_hr):"–"}</td>
+      <td>${isNum(d.sleep_hours)?d.sleep_hours.toFixed(2):"–"}</td>
+      <td>${isNum(d.sleep_score)?fmt(d.sleep_score):"–"}</td>
+      <td>${isNum(d.stress_avg)?fmt(d.stress_avg):"–"}</td>
+      <td>${isNum(d.bb_low)?fmt(d.bb_low):"–"}</td>
+      <td>${isNum(d.bb_high)?fmt(d.bb_high):"–"}</td>
+      <td>${isNum(d.steps)?fmt(d.steps):"–"}</td>
+      <td>${isNum(d.distance_m)?(d.distance_m/1000).toFixed(2):"–"}</td></tr>`;
+  }).join("");
+
+  $("#meta").textContent =
+    `${days.length} tage · ${days.filter(d=>isNum(d.hrv_avg)).length} mit hrv · quelle: garmin · gebaut ${(RAW.built||"").slice(0,16).replace("T"," ")}`;
+}
+
+/* ---------- Umschaltleiste ---------- */
+$("#switch").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  [...document.querySelectorAll("#switch button")].forEach(x=>x.setAttribute("aria-pressed", x===b));
+  render(+b.dataset.days);
+});
+render(60);
+
+/* ---------- Sichtschutz (Anzeige-Sperre; die Daten stehen im Klartext in dieser Datei) ---------- */
+(function(){
+  const CODE="7009", KEY="ski01_unlocked";
+  const g=(id)=>document.getElementById(id);
+  function relock(){ document.body.classList.add("locked"); try{localStorage.removeItem(KEY)}catch(e){} }
+  function unlock(){
+    document.body.classList.remove("locked");
+    try{localStorage.setItem(KEY,CODE)}catch(e){}
+    const a=document.querySelector('#switch button[aria-pressed="true"]');
+    render(a?+a.dataset.days:60);
+  }
+  let stored=false; try{ stored = localStorage.getItem(KEY)===CODE; }catch(e){}
+  if(stored) document.body.classList.remove("locked");
+  g("gate-form").addEventListener("submit",e=>{
+    e.preventDefault();
+    if(g("gate-code").value.trim()===CODE){ g("gate-err").textContent=""; unlock(); }
+    else { g("gate-err").textContent="falscher code"; g("gate-code").select(); }
+  });
+  g("relock").addEventListener("click",()=>{ g("gate-code").value=""; relock(); });
+})();
+</script>
+</body>
+</html>
