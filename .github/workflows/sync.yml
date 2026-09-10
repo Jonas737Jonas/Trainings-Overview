@@ -2,8 +2,11 @@ name: garmin-sync
 
 on:
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "30 6 * * *"
+    - cron: "0 17 * * *"
   workflow_dispatch:
+  repository_dispatch:
+    types: [manual-sync]
 
 permissions:
   contents: write
@@ -22,52 +25,44 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-
       - name: Abhaengigkeiten
         run: pip install -r requirements.txt
-
       - name: Garmin-Token aus Secret wiederherstellen
         env:
           GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
         run: |
-          if [ -z "$GARMIN_TOKENS" ]; then
-            echo "::error::Secret GARMIN_TOKENS fehlt."
-            exit 1
-          fi
+          if [ -z "$GARMIN_TOKENS" ]; then echo "::error::Secret GARMIN_TOKENS fehlt."; exit 1; fi
           mkdir -p tokens
           printf '%s' "$GARMIN_TOKENS" > tokens/garmin_tokens.json
           chmod 600 tokens/garmin_tokens.json
-
       - name: Garmin holen + Dashboard bauen
         run: python garmin_sync.py --days 60 --no-publish
-
       - name: Seite zusammenstellen
         run: |
           mkdir -p _site
           cp garmin/dashboard.html _site/dashboard.html
           cp garmin/robots.txt _site/robots.txt
           printf '<!doctype html><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=dashboard.html">' > _site/index.html
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-
       - id: deploy
         uses: actions/deploy-pages@v4
-
       - name: dashboard.html in den Repo-Verlauf committen
         run: |
           git config user.name  "garmin-sync-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cp garmin/dashboard.html dashboard.html
           git add dashboard.html
-          if git diff --staged --quiet; then
-            echo "Keine Aenderungen."
-          else
-            git commit -m "sync $(date -u +%Y-%m-%dT%H:%MZ)"
-            git push
-          fi
+          if git diff --staged --quiet; then echo "Keine Aenderungen."; else git commit -m "sync $(date -u +%Y-%m-%dT%H:%MZ)"; git push; fi
+      - name: Log als Artefakt sichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-log
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
