@@ -7,13 +7,15 @@ Was das Script macht
 * Einmaliger Login (--login): fragt E-Mail + Passwort verdeckt ab, fängt einen
   2FA-Code ab und speichert danach nur ein Login-Token (~1 Jahr gültig).
   Passwort und Token laufen nie über stdout/Logs/Umgebungsvariablen.
-* Danach: lädt Aktivitäten und Tageswerte (Schlaf, HRV, Ruhepuls, Body Battery,
-  Stress, Schritte, Training Readiness) und legt sie unter garmin/ ab:
+* Danach: lädt Aktivitäten und Tageswerte (Schlaf, HRV, Ruhepuls, Body Battery
+  inkl. Tagesverlauf, Stress, Schritte, Training Readiness, VO2max, Wettkampf-
+  prognosen, HF-Zonen) und legt sie unter garmin/ ab:
   - garmin/data.json          – alle Werte des Zeitraums, maschinenlesbar
   - garmin/tage/<datum>.md     – eine Notiz pro Tag
   - garmin/einheiten/<...>.md  – eine Notiz pro Workout
 * Jeder einzelne Abruf ist abgesichert: ein fehlender Wert bricht den Lauf nie
   ab und wird als "keine Daten" (null) behandelt, niemals als 0.
+* Historie wird beim Zusammenführen auf MAX_HISTORY_DAYS begrenzt (siehe unten).
 * Es wird nichts in dein Garmin-Konto zurückgeschrieben.
 
 Aufrufe
@@ -49,6 +51,9 @@ LOG_DIR = BASE / "logs"
 # Kurze Pause zwischen einzelnen API-Abrufen, damit Garmin nicht drosselt.
 CALL_PAUSE = 0.6
 DAY_PAUSE = 0.4
+
+# Wie viele Tage Historie data.json maximal behält (älteres wird beim Merge verworfen).
+MAX_HISTORY_DAYS = 400
 
 
 # --- kleine Helfer ---------------------------------------------------------
@@ -237,7 +242,66 @@ def fetch_day(api, d: str) -> dict:
     rec["training_readiness_feedback"] = g(tr, "feedbackLong") or g(tr, "feedbackShort")
     time.sleep(CALL_PAUSE)
 
+    rec["bb_series"] = fetch_bb_series(api, d)
+    time.sleep(CALL_PAUSE)
+
     return rec
+
+
+def fetch_bb_series(api, d: str) -> list | None:
+    """Body-Battery-Tagesverlauf als [Minute-seit-Mitternacht, Wert]-Punkte (lokal),
+    damit sich 'jetzt' mit 'gleicher Uhrzeit an einem anderen Tag' vergleichen lässt.
+    Nur wenige Punkte pro Tag (Garmin liefert Änderungspunkte, keine feste Taktung)."""
+    raw = safe(f"body battery verlauf {d}", api.get_body_battery, d, d)
+    if not raw or not isinstance(raw, list):
+        return None
+    entry = raw[0]
+    arr = g(entry, "bodyBatteryValuesArray")
+    if not arr:
+        return None
+    start_gmt = g(entry, "startTimestampGMT")
+    start_local = g(entry, "startTimestampLocal")
+    offset_ms = 0
+    try:
+        fmt_ = "%Y-%m-%dT%H:%M:%S.%f"
+        offset_ms = int(
+            (
+                datetime.strptime(start_local, fmt_) - datetime.strptime(start_gmt, fmt_)
+            ).total_seconds()
+            * 1000
+        )
+    except (TypeError, ValueError):
+        pass
+    points: dict[int, int] = {}
+    for p in arr:
+        if not isinstance(p, list) or len(p) < 2:
+            continue
+        ts, val = p[0], p[1]
+        if not num(ts) or not num(val):
+            continue
+        minute = int(((ts + offset_ms) // 60000) % 1440)
+        points[minute] = int(val)
+    if not points:
+        return None
+    return sorted([m, v] for m, v in points.items())
+
+
+def fetch_hr_zones(api) -> dict | None:
+    """Deine hinterlegten Herzfrequenz-Zonen bei Garmin (einmal pro Lauf, ändert sich selten)."""
+    r = safe("hf-zonen", api.get_heart_rate_zones)
+    if isinstance(r, list) and r:
+        r = r[0]
+    if not r:
+        return None
+    return {
+        "z1_floor": num(g(r, "zone1Floor")),
+        "z2_floor": num(g(r, "zone2Floor")),
+        "z3_floor": num(g(r, "zone3Floor")),
+        "z4_floor": num(g(r, "zone4Floor")),
+        "z5_floor": num(g(r, "zone5Floor")),
+        "max_hr": num(g(r, "maxHeartRateUsed")),
+        "resting_hr": num(g(r, "restingHeartRateUsed")),
+    }
 
 
 def fetch_range_metrics(api, start: str, end: str) -> dict:
@@ -396,7 +460,7 @@ def write_activity_note(a: dict) -> None:
     (ACT_DIR / fname).write_text("\n".join(lines), encoding="utf-8")
 
 
-def merge_json(new_days: list[dict], new_acts: list[dict], rng: dict) -> dict:
+def merge_json(new_days: list[dict], new_acts: list[dict], rng: dict, hr_zones: dict | None) -> dict:
     """Bestehende data.json einlesen und mit neuen Werten zusammenführen."""
     old = {"days": [], "activities": []}
     if DATA_JSON.exists():
@@ -409,13 +473,25 @@ def merge_json(new_days: list[dict], new_acts: list[dict], rng: dict) -> dict:
     for r in new_days:
         days[r["date"]] = r  # neuer Abruf gewinnt
 
+    # Historie begrenzen, damit data.json/dashboard.html nicht unbegrenzt wachsen.
+    if days:
+        newest = max(days)
+        cutoff = (
+            datetime.strptime(newest, "%Y-%m-%d") - timedelta(days=MAX_HISTORY_DAYS)
+        ).strftime("%Y-%m-%d")
+        days = {d: r for d, r in days.items() if d >= cutoff}
+
     acts = {a.get("activity_id") or a.get("start_time"): a for a in old.get("activities", [])}
     for a in new_acts:
         acts[a.get("activity_id") or a.get("start_time")] = a
+    if days:
+        act_cutoff = min(days)
+        acts = {k: a for k, a in acts.items() if (a.get("date") or "9999") >= act_cutoff}
 
     merged = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "range": rng,
+        "hr_zones": hr_zones or old.get("hr_zones"),
         "days": sorted(days.values(), key=lambda r: r["date"]),
         "activities": sorted(
             acts.values(), key=lambda a: a.get("start_time") or "", reverse=True
@@ -520,6 +596,12 @@ def main() -> None:
     race_days = sum(1 for r in day_records if r.get("race_5k_s") is not None)
     log(f"VO2max auf {vo2_days} Tagen, Wettkampfprognosen auf {race_days} Tagen")
 
+    hr_zones = fetch_hr_zones(api)
+    log("HF-Zonen: " + (", ".join(f"{k}={v}" for k, v in hr_zones.items()) if hr_zones else "keine Daten"))
+
+    bb_days = sum(1 for r in day_records if r.get("bb_series"))
+    log(f"Body-Battery-Verlauf auf {bb_days} Tagen")
+
     with_data = sum(
         1
         for r in day_records
@@ -554,7 +636,7 @@ def main() -> None:
         write_activity_note(a)
 
     merged = merge_json(
-        day_records, acts, {"start": all_days[0], "end": all_days[-1]}
+        day_records, acts, {"start": all_days[0], "end": all_days[-1]}, hr_zones
     )
     DATA_JSON.write_text(
         json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8"
